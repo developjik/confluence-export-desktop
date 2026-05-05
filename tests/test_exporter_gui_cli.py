@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import os
@@ -88,7 +88,7 @@ class GuiCliTests(unittest.TestCase):
             "QStackedWidget",
             "QListWidget",
             "QTableWidget",
-            "Confluence 문서 동기화",
+            "Confluence 문서 내보내기",
             "연결",
             "작업",
             "작업 설정",
@@ -107,13 +107,13 @@ class GuiCliTests(unittest.TestCase):
             "set_job_summary",
             "작업명",
             "저장 폴더",
-            "최근 동기화",
+            "최근 내보내기",
             "한국시간",
             "run_history_table",
-            "동기화 성공",
+            "내보내기 성공",
             "생성/업데이트",
-            "지금 동기화",
-            "동기화 중...",
+            "지금 내보내기",
+            "내보내기 중...",
             "set_running_controls",
             "편집",
             "대상 폴더 열기",
@@ -197,7 +197,7 @@ class GuiCliTests(unittest.TestCase):
             "result_text",
             "selected_job_summary",
             "last_sync_summary",
-            "동기화 상태",
+            "내보내기 상태",
             "sync_status",
             "새로고침",
             "연결 테스트 상태",
@@ -228,7 +228,7 @@ class GuiCliTests(unittest.TestCase):
     def test_gui_build_spec_includes_tray_icon_assets(self):
         from pathlib import Path
 
-        spec = Path("packaging/confluence-sync-gui.spec").read_text(encoding="utf-8")
+        spec = Path("packaging/confluence-export-desktop.spec").read_text(encoding="utf-8")
         self.assertIn("app-32.png", spec)
         self.assertIn("app-256.png", spec)
         self.assertIn("PySide6", spec)
@@ -236,19 +236,19 @@ class GuiCliTests(unittest.TestCase):
 
     def test_gui_defaults_to_empty_jobs_override_json_and_disabled_schedule_controls(self):
         previous_qt_platform = os.environ.get("QT_QPA_PLATFORM")
-        previous_disable_tray = os.environ.get("CONFLUENCE_SYNC_DISABLE_TRAY")
+        previous_disable_tray = os.environ.get("CONFLUENCE_EXPORT_DISABLE_TRAY")
         os.environ["QT_QPA_PLATFORM"] = "offscreen"
-        os.environ["CONFLUENCE_SYNC_DISABLE_TRAY"] = "1"
+        os.environ["CONFLUENCE_EXPORT_DISABLE_TRAY"] = "1"
         previous_appdata = os.environ.get("APPDATA")
         try:
             with tempfile.TemporaryDirectory() as temp_root:
                 os.environ["APPDATA"] = temp_root
                 from PySide6.QtWidgets import QApplication
 
-                from confluence_sync_tool.gui import ConfluenceSyncApp
+                from confluence_sync_tool.gui import ConfluenceExportDesktopApp
 
                 app = QApplication.instance() or QApplication([])
-                window = ConfluenceSyncApp()
+                window = ConfluenceExportDesktopApp()
                 try:
                     self.assertEqual(window.cme_config_text.toPlainText().strip(), "{}")
                     self.assertIn("connection_config", window.cme_config_preview.toPlainText())
@@ -272,9 +272,9 @@ class GuiCliTests(unittest.TestCase):
             else:
                 os.environ["QT_QPA_PLATFORM"] = previous_qt_platform
             if previous_disable_tray is None:
-                os.environ.pop("CONFLUENCE_SYNC_DISABLE_TRAY", None)
+                os.environ.pop("CONFLUENCE_EXPORT_DISABLE_TRAY", None)
             else:
-                os.environ["CONFLUENCE_SYNC_DISABLE_TRAY"] = previous_disable_tray
+                os.environ["CONFLUENCE_EXPORT_DISABLE_TRAY"] = previous_disable_tray
 
     def test_plan_display_focuses_on_cme_job_and_skip_errors(self):
         text = format_plan_display(

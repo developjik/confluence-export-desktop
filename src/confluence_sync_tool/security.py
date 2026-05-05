@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import base64
 import ctypes
@@ -49,7 +49,7 @@ def normalize_base_url(base_url: str) -> str:
 
 
 def credential_key(base_url: str, email: str) -> str:
-    return f"ConfluenceSync:{normalize_base_url(base_url)}:{email.strip().lower()}"
+    return f"ConfluenceExportDesktop:{normalize_base_url(base_url)}:{email.strip().lower()}"
 
 
 @dataclass

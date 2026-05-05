@@ -87,7 +87,7 @@ def validate_job(job: Job, create_dirs: bool = False) -> None:
         raise AppError("File System", "TARGET_NOT_FOUND", "저장 폴더를 찾을 수 없습니다.", str(target), False)
     if not target.is_dir():
         raise AppError("File System", "TARGET_NOT_DIRECTORY", "저장 위치는 폴더여야 합니다.", str(target), False)
-    probe = target / ".confluence_sync_write_probe"
+    probe = target / ".confluence_export_write_probe"
     try:
         probe.write_text("ok", encoding="utf-8")
         probe.unlink(missing_ok=True)

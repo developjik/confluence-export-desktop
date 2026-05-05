@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import sys
@@ -7,7 +7,7 @@ from .errors import AppError
 
 
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-RUN_VALUE = "ConfluenceSync"
+RUN_VALUE = "ConfluenceExportDesktop"
 
 
 def auto_start_command() -> str:

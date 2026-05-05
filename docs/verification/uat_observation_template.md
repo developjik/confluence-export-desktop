@@ -1,4 +1,4 @@
-# UAT Observation Template
+﻿# UAT Observation Template
 
 Use this for non-developer GUI verification.
 
@@ -17,9 +17,9 @@ Use this for non-developer GUI verification.
 - Job created and saved: yes/no
 - Job visible in 작업 list: yes/no
 - User found selected Job summary and target directory: yes/no
-- User found actions 지금 동기화 / 편집 / 대상 폴더 열기 / 삭제: yes/no
-- Sync Now completed or showed actionable failure: yes/no
-- 동기화 중 button/action disabled state observed: yes/no
+- User found actions 지금 내보내기 / 편집 / 대상 폴더 열기 / 삭제: yes/no
+- Export Now completed or showed actionable failure: yes/no
+- 내보내기 중 button/action disabled state observed: yes/no
 - Recent sync summary/status understood: yes/no
 - Controlled failure message was actionable: yes/no
 - Blockers:

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import threading
 from pathlib import Path
@@ -34,16 +34,16 @@ class TrayRuntime:
                 raise FileNotFoundError(str(self.icon_path))
             image = Image.open(self.icon_path)
             self.icon = pystray.Icon(
-                "ConfluenceSync",
+                "ConfluenceExportDesktop",
                 image,
-                "Confluence Sync",
+                "Confluence Export Desktop",
                 menu=pystray.Menu(
                     pystray.MenuItem("열기", lambda _icon, _item: self.show_window()),
                     pystray.MenuItem("스케줄 일시정지/재개", lambda _icon, _item: self.toggle_pause()),
                     pystray.MenuItem("종료", lambda _icon, _item: self.quit_app()),
                 ),
             )
-            self.thread = threading.Thread(target=self.icon.run, name="ConfluenceSyncTray", daemon=True)
+            self.thread = threading.Thread(target=self.icon.run, name="ConfluenceExportDesktopTray", daemon=True)
             self.thread.start()
             self.last_error = ""
             return True

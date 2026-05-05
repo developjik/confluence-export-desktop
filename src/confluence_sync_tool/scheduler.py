@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import threading
 import uuid
@@ -205,7 +205,7 @@ class SchedulerRuntime:
         if self._thread and self._thread.is_alive():
             return
         self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, name="ConfluenceSyncScheduler", daemon=True)
+        self._thread = threading.Thread(target=self._loop, name="ConfluenceExportDesktopScheduler", daemon=True)
         self._thread.start()
 
     def stop(self) -> None:

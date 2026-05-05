@@ -1,4 +1,4 @@
-# Completion Audit
+﻿# Completion Audit
 
 Audited at: 2026-05-05T01:37:24+09:00
 
@@ -6,7 +6,7 @@ Objective: update program documentation to match the current `docs\PRD_v1.0.md` 
 
 ## Current Product Definition
 
-Confluence Sync Tool is a Windows GUI/CLI Job Runner for `confluence-markdown-exporter==4.1.1`.
+Confluence Export Desktop is a Windows GUI/CLI Job Runner for `confluence-markdown-exporter==4.1.1`.
 
 The app owns:
 
@@ -14,7 +14,7 @@ The app owns:
 - Windows Credential Manager token storage
 - CME config generation and merge
 - Preview/Dry Run validation wrapper
-- Sync Now execution through the CME adapter
+- Export Now execution through the CME adapter
 - Run history and logs
 - PyInstaller onedir packaging
 

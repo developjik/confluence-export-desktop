@@ -1,7 +1,7 @@
-[project]
-name = "confluence-sync-tool"
+﻿[project]
+name = "confluence-export-desktop"
 version = "0.1.0"
-description = "Windows-first Confluence Cloud to local Markdown sync MVP"
+description = "Windows-first Confluence Cloud to local Markdown export desktop app"
 requires-python = ">=3.11"
 dependencies = [
     "confluence-markdown-exporter==4.1.1",
@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-confluence-sync = "confluence_sync_tool.gui:main"
+confluence-export-desktop = "confluence_sync_tool.gui:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

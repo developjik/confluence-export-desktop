@@ -1,4 +1,4 @@
-{
+﻿{
   "updated_at": "2026-05-05T01:37:24+09:00",
   "baseline": "docs/PRD_v1.0.md",
   "mode": "cme-only",
@@ -35,7 +35,7 @@
     "CLI commands include check, login, logout, list-jobs, add-job, preview, dry-run, run, and validate.",
     "Token storage uses Windows Credential Manager and token-stdin smoke output does not leak the sentinel token.",
     "Optional built CLI imports the CME package from the PyInstaller bundle when built with -IncludeCli.",
-    "Built GUI launches from dist/confluence-sync/confluence-sync.exe."
+    "Built GUI launches from dist/confluence-export-desktop/confluence-export-desktop.exe."
   ],
   "release_gates": {
     "compile_and_tests": {

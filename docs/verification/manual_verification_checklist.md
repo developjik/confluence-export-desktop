@@ -1,4 +1,4 @@
-# Manual Verification Checklist
+﻿# Manual Verification Checklist
 
 Generated from `docs/PRD_v1.0.md` for the current CME-only product.
 
@@ -35,12 +35,12 @@ Required environment:
 
 - Clean Windows 10 or Windows 11 VM
 - No Python installation
-- Built `dist\confluence-sync` folder, or the external verification bundle
+- Built `dist\confluence-export-desktop` folder, or the external verification bundle
 
 Steps:
 
-1. Copy `dist\confluence-sync` to the VM.
-2. Launch `dist\confluence-sync\confluence-sync.exe`.
+1. Copy `dist\confluence-export-desktop` to the VM.
+2. Launch `dist\confluence-export-desktop\confluence-export-desktop.exe`.
 3. Move the onedir folder to a different path and repeat step 2.
 4. Optional: copy the repo `scripts` folder and run `.\scripts\verify_external_gates.ps1 -Mode Package`.
 
@@ -75,21 +75,21 @@ Recommended automated runner:
 
 ```powershell
 .\scripts\build.ps1 -IncludeCli
-$env:CONFLUENCE_SYNC_BASE_URL = "https://company.atlassian.net"
-$env:CONFLUENCE_SYNC_EMAIL = "user@example.com"
-$env:CONFLUENCE_SYNC_API_TOKEN = "<token>"
-$env:CONFLUENCE_SYNC_PAGE_URL = "https://company.atlassian.net/wiki/spaces/SPACE/pages/123456"
+$env:CONFLUENCE_EXPORT_BASE_URL = "https://company.atlassian.net"
+$env:CONFLUENCE_EXPORT_EMAIL = "user@example.com"
+$env:CONFLUENCE_EXPORT_API_TOKEN = "<token>"
+$env:CONFLUENCE_EXPORT_PAGE_URL = "https://company.atlassian.net/wiki/spaces/SPACE/pages/123456"
 .\scripts\verify_external_gates.ps1 -Mode LiveConfluence
 ```
 
 Manual equivalent:
 
-1. Run `Get-Content token.txt | confluence-sync-cli login --base-url <url> --email <email> --token-stdin --test`.
-2. Create a Job with `confluence-sync-cli add-job --job-id live-smoke --name "Live Smoke" --url <page-url> --target-dir <workspace> --include-children`.
-3. Run `confluence-sync-cli preview --job live-smoke`.
-4. Run `confluence-sync-cli dry-run --job live-smoke`.
-5. Run `confluence-sync-cli run --job live-smoke`.
-6. Run `confluence-sync-cli logout`.
+1. Run `Get-Content token.txt | confluence-export-cli login --base-url <url> --email <email> --token-stdin --test`.
+2. Create a Job with `confluence-export-cli add-job --job-id live-smoke --name "Live Smoke" --url <page-url> --target-dir <workspace> --include-children`.
+3. Run `confluence-export-cli preview --job live-smoke`.
+4. Run `confluence-export-cli dry-run --job live-smoke`.
+5. Run `confluence-export-cli run --job live-smoke`.
+6. Run `confluence-export-cli logout`.
 7. Inspect the target directory, `run_history.json`, `.logs\app.log`, and `confluence-lock.json`.
 
 Pass criteria:
@@ -130,10 +130,10 @@ Steps:
 7. Confirm `저장 후 작업 만들기` is enabled only after a successful test for the current input values.
 8. Ask the participant to click `저장 후 작업 만들기`.
 9. Ask the participant to create and save a Job.
-10. Confirm the Job actions are `지금 동기화`, `편집`, `대상 폴더 열기`, and `삭제`.
-11. Ask the participant to run `지금 동기화`.
-12. Confirm the button changes to `동기화 중...` and conflicting action buttons are disabled while the run is active.
-13. Confirm `최근 동기화` is a table and shows recent runs in latest-first order with 한국시간, success/failure, 생성/업데이트, 삭제, 건너뜀, 오류 counts.
+10. Confirm the Job actions are `지금 내보내기`, `편집`, `대상 폴더 열기`, and `삭제`.
+11. Ask the participant to run `지금 내보내기`.
+12. Confirm the button changes to `내보내기 중...` and conflicting action buttons are disabled while the run is active.
+13. Confirm `최근 내보내기` is a table and shows recent runs in latest-first order with 한국시간, success/failure, 생성/업데이트, 삭제, 건너뜀, 오류 counts.
 14. Observe without coaching except for credential values.
 
 Pass criteria:

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import unittest
@@ -119,7 +119,7 @@ class SchedulerTests(unittest.TestCase):
                 append_scheduler_event(event)
                 rows = load_scheduler_events()
                 self.assertEqual(rows[-1]["job_id"], "job-a")
-                self.assertNotIn("sentinel-secret-token", (Path(os.environ["APPDATA"]) / "ConfluenceSync" / "app" / "scheduler_events.jsonl").read_text())
+                self.assertNotIn("sentinel-secret-token", (Path(os.environ["APPDATA"]) / "ConfluenceExportDesktop" / "app" / "scheduler_events.jsonl").read_text())
             finally:
                 if old_appdata is None:
                     os.environ.pop("APPDATA", None)

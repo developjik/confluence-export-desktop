@@ -1,4 +1,4 @@
-# PRD v1.0: Confluence Sync Tool
+﻿# PRD v1.0: Confluence Export Desktop
 
 작성일: 2026-05-05  
 제품 정의: Python 없이 실행되는 `confluence-markdown-exporter` 기반 Windows GUI/CLI Job Runner  
@@ -6,7 +6,7 @@
 
 ## 1. Summary
 
-Confluence Sync Tool은 사용자가 Confluence page, page tree, space, organization export를 GUI 또는 CLI Job으로 실행할 수 있게 하는 Windows 앱이다.
+Confluence Export Desktop은 사용자가 Confluence page, page tree, space, organization export를 GUI 또는 CLI Job으로 실행할 수 있게 하는 Windows 앱이다.
 
 앱은 자체 Markdown 변환기나 자체 Confluence crawler를 유지하지 않는다. 실제 export, Markdown 변환, attachment 처리, skip/cleanup, lockfile 관리는 CME가 담당한다. 앱은 CME 실행을 사용자 PC에서 쉽게 설정, 저장, 실행, 기록하는 wrapper 역할을 한다.
 
@@ -22,7 +22,7 @@ Confluence Sync Tool은 사용자가 Confluence page, page tree, space, organiza
 
 | ID | Goal | Success Criteria |
 | --- | --- | --- |
-| G-01 | CME-only export runner 제공 | 모든 Sync Now 실행이 CME adapter 경로만 사용한다. |
+| G-01 | CME-only export runner 제공 | 모든 Export Now 실행이 CME adapter 경로만 사용한다. |
 | G-02 | GUI에서 모든 주요 CME 기능 설정 | 작업 설정 화면이 scope, URL, href, attachment, cleanup, skip, connection 옵션과 raw CME JSON을 제공한다. |
 | G-03 | CLI에서도 동일한 Job 실행 가능 | login, logout, list-jobs, add-job, preview, dry-run, run, validate, check 명령이 동작한다. |
 | G-04 | Python 없는 Windows 실행 | PyInstaller onedir GUI/CLI가 built smoke를 통과한다. |
@@ -74,9 +74,9 @@ Confluence Sync Tool은 사용자가 Confluence page, page tree, space, organiza
 3. 앱은 실행 예정 scope, URL 목록, warning을 표시한다.
 4. 앱은 workspace export 결과를 변경하지 않는다.
 
-### 6.4 Sync Now
+### 6.4 Export Now
 
-1. 사용자가 Sync Now를 누른다.
+1. 사용자가 Export Now를 누른다.
 2. 앱은 Credential Manager에서 token을 읽는다.
 3. 앱은 CME config를 임시 파일로 생성하고 인증 정보를 주입한다.
 4. 앱은 CME를 in-process adapter로 실행한다.
@@ -99,7 +99,7 @@ Confluence Sync Tool은 사용자가 Confluence page, page tree, space, organiza
 | S-08 | CME organization export |
 | S-09 | CME Config JSON override |
 | S-10 | Preview/Dry Run validation wrapper |
-| S-11 | Sync Now execution |
+| S-11 | Export Now execution |
 | S-12 | run history storage |
 | S-13 | PyInstaller onedir packaging |
 
@@ -178,7 +178,7 @@ Confluence Sync Tool은 사용자가 Confluence page, page tree, space, organiza
 
 | ID | Requirement | Acceptance Criteria |
 | --- | --- | --- |
-| FR-RUN-01 | Sync Now는 CME adapter를 실행해야 한다. | internal exporter import나 execution path가 없다. |
+| FR-RUN-01 | Export Now는 CME adapter를 실행해야 한다. | internal exporter import나 execution path가 없다. |
 | FR-RUN-02 | 실행 직전 Credential Manager 인증을 CME config에 주입해야 한다. | token은 임시 CME config에만 존재하고 로그에 남지 않는다. |
 | FR-RUN-03 | 성공/실패 run history를 기록해야 한다. | `run_history.json`에 run_id, mode, status, summary(created/updated/deleted/skipped/errors), error, cme 정보가 기록된다. |
 | FR-RUN-04 | 실패 시 사용자 메시지와 technical message를 분리해야 한다. | error object가 `category`, `code`, `user_message`, `technical_message`, `retryable`을 포함한다. |
@@ -189,16 +189,16 @@ Confluence Sync Tool은 사용자가 Confluence page, page tree, space, organiza
 | --- | --- | --- |
 | FR-GUI-01 | GUI는 연결, 작업, 작업 설정 섹션을 제공해야 한다. | Setup Checker와 Logs 섹션 없이 인증 저장 후 Job 등록 흐름이 source와 smoke에서 확인된다. |
 | FR-GUI-02 | 작업 설정 화면은 CME 옵션을 노출해야 한다. | internal backend selector가 없다. |
-| FR-GUI-03 | GUI의 Sync Now는 background thread에서 실행되어야 한다. | GUI가 장시간 작업 중 응답 불능 상태가 되지 않고, 실행 중에는 지금 동기화 버튼이 동기화 중...으로 바뀌며 충돌 가능한 작업 버튼이 비활성화된다. |
+| FR-GUI-03 | GUI의 Export Now는 background thread에서 실행되어야 한다. | GUI가 장시간 작업 중 응답 불능 상태가 되지 않고, 실행 중에는 지금 내보내기 버튼이 내보내기 중...으로 바뀌며 충돌 가능한 작업 버튼이 비활성화된다. |
 | FR-GUI-04 | 연결 섹션은 인증 저장 후 Job 등록 화면으로 바로 이동할 수 있어야 한다. | 저장 후 작업 만들기로 Credential Manager 저장 후 작업 설정 화면이 열린다. |
 | FR-GUI-05 | 작업 섹션은 테이블, 선택한 작업 요약, 주요 실행 action을 한 화면에 제공해야 한다. | 선택한 Job의 작업명, 범위, 저장 폴더, URL이 라벨-값 행으로 표시되고 목록 상단에는 새 작업만 표시된다. |
 | FR-GUI-06 | 작업 설정 화면은 기본 정보, CME 옵션, 예약, 고급 JSON으로 입력을 분리해야 한다. | 일반 설정과 raw CME JSON 편집이 섞이지 않는다. |
 | FR-GUI-07 | GUI의 사용자-facing 라벨과 핵심 안내 문구는 한국어로 제공해야 한다. | Confluence/CME 고유 용어를 제외한 섹션, 버튼, 필드명, 짧은 안내문이 한국어다. |
 | FR-GUI-08 | 연결 화면의 동작은 테스트, 저장/작업 생성, 계정 관리 영역으로 분리해야 한다. | 연결 테스트, 저장 후 작업 만들기, 저장된 토큰 삭제 버튼이 서로 다른 영역에 표시된다. |
 | FR-GUI-09 | 연결 테스트 결과는 별도 상태 패널 없이 알림과 버튼 활성 상태로 제공해야 한다. | 성공/실패 시 알림이 표시되고, 성공한 입력값에서만 저장 후 작업 만들기 버튼이 활성화된다. |
-| FR-GUI-10 | 작업 화면의 직접 action은 지금 동기화, 편집, 대상 폴더 열기, 삭제만 제공해야 한다. | Preview/Dry Run 버튼은 GUI 작업 화면에 표시하지 않는다. |
-| FR-GUI-11 | 작업 화면은 상세 JSON/최근 결과 JSON/별도 동기화 상태 패널 없이 선택한 작업 요약과 최근 동기화 표를 보여야 한다. | 작업 화면에 선택한 작업과 최근 동기화 표가 표시되고 큰 JSON 결과 패널과 동기화 상태 섹션은 없다. |
-| FR-GUI-12 | 작업 선택 시 최근 동기화 기록을 표로 보여야 한다. | 최근 10회 실행의 한국시간, 성공/실패, 문서 생성/업데이트, 삭제, 건너뜀, 오류 수가 최신순으로 표시된다. |
+| FR-GUI-10 | 작업 화면의 직접 action은 지금 내보내기, 편집, 대상 폴더 열기, 삭제만 제공해야 한다. | Preview/Dry Run 버튼은 GUI 작업 화면에 표시하지 않는다. |
+| FR-GUI-11 | 작업 화면은 상세 JSON/최근 결과 JSON/별도 내보내기 상태 패널 없이 선택한 작업 요약과 최근 내보내기 표를 보여야 한다. | 작업 화면에 선택한 작업과 최근 내보내기 표가 표시되고 큰 JSON 결과 패널과 내보내기 상태 섹션은 없다. |
+| FR-GUI-12 | 작업 선택 시 최근 내보내기 기록을 표로 보여야 한다. | 최근 10회 실행의 한국시간, 성공/실패, 문서 생성/업데이트, 삭제, 건너뜀, 오류 수가 최신순으로 표시된다. |
 
 ### 8.8 CLI
 
@@ -278,7 +278,7 @@ Confluence Sync Tool은 사용자가 Confluence page, page tree, space, organiza
     }
   ],
   "warnings": [
-    "Preview validates CME config/auth shape and target path only. CME calculates page-level changes during Sync Now."
+    "Preview validates CME config/auth shape and target path only. CME calculates page-level changes during Export Now."
   ]
 }
 ```
@@ -360,7 +360,7 @@ GUI / CLI
 
 | ID | Requirement | Acceptance Criteria |
 | --- | --- | --- |
-| PKG-01 | The GUI must be built as the default PyInstaller onedir app; the CLI is an optional developer/support build. | `dist\confluence-sync\confluence-sync.exe` exists after `scripts\build.ps1`; `dist\confluence-sync-cli\confluence-sync-cli.exe` exists only when built with `-IncludeCli`. |
+| PKG-01 | The GUI must be built as the default PyInstaller onedir app; the CLI is an optional developer/support build. | `dist\confluence-export-desktop\confluence-export-desktop.exe` exists after `scripts\build.ps1`; `dist\confluence-export-cli\confluence-export-cli.exe` exists only when built with `-IncludeCli`. |
 | PKG-02 | CME package must be bundled. | GUI packaging collects `confluence_markdown_exporter`; optional built CLI can run `check` when included. |
 | PKG-03 | User PC must not need Python. | package gate passes on a clean Windows machine without Python. |
 | PKG-04 | Built GUI must launch. | smoke starts GUI and confirms the process remains running. |
@@ -414,7 +414,7 @@ Errors must expose user-facing and technical messages separately.
 | UT-CME-03 | scope and multi-URL validation |
 | IT-ENGINE-01 | Preview uses CME-only plan |
 | IT-ENGINE-02 | Dry Run does not mutate workspace |
-| IT-ENGINE-03 | Sync Now records CME run history |
+| IT-ENGINE-03 | Export Now records CME run history |
 | IT-ENGINE-04 | failed CME run records error |
 | IT-GUI-01 | GUI source exposes CME controls and no backend selector |
 | IT-CLI-01 | CLI exposes CME options and no backend argument |

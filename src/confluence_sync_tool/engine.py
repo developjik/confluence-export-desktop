@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from typing import Callable
 
@@ -114,5 +114,5 @@ class SyncEngine:
             local_snapshot_hash=local_hash,
             summary={"create": 0, "update": 1, "skip": 0, "error": 0},
             items=[item],
-            warnings=["Preview validates CME config/auth shape and target path only. CME calculates page-level changes during Sync Now."],
+            warnings=["Preview validates CME config/auth shape and target path only. CME calculates page-level changes during Export Now."],
         )

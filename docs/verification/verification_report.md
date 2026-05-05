@@ -1,4 +1,4 @@
-# Verification Report
+﻿# Verification Report
 
 Updated at: 2026-05-05T01:37:24+09:00  
 Baseline: `docs/PRD_v1.0.md`  
@@ -34,7 +34,7 @@ Latest generated coverage: [coverage_report.md](coverage_report.md)
 - CLI commands are `check`, `login`, `logout`, `list-jobs`, `add-job`, `preview`, `dry-run`, `run`, and `validate`.
 - Token storage uses Windows Credential Manager and smoke tests confirm token-stdin output does not leak the sentinel token.
 - The optional built CLI can import the CME package from the PyInstaller bundle when built with `-IncludeCli`.
-- Built GUI launches from `dist\confluence-sync\confluence-sync.exe`.
+- Built GUI launches from `dist\confluence-export-desktop\confluence-export-desktop.exe`.
 
 ## Release Gate Status
 

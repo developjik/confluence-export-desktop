@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)]
     [string]$EvidencePath,
 
@@ -108,7 +108,7 @@ $imported = @()
 try {
     if (Test-Path -LiteralPath $sourcePath.Path -PathType Leaf) {
         if ([System.IO.Path]::GetExtension($sourcePath.Path).Equals(".zip", [System.StringComparison]::OrdinalIgnoreCase)) {
-            $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("confluence-sync-evidence-import-" + [guid]::NewGuid().ToString("N"))
+            $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("confluence-export-desktop-evidence-import-" + [guid]::NewGuid().ToString("N"))
             New-Item -ItemType Directory -Force -Path $temporaryRoot | Out-Null
             Expand-Archive -LiteralPath $sourcePath.Path -DestinationPath $temporaryRoot -Force
             $importRoot = $temporaryRoot

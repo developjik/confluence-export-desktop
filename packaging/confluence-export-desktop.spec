@@ -1,6 +1,6 @@
-# PyInstaller onedir spec for the PySide6 GUI app.
+﻿# PyInstaller onedir spec for the PySide6 GUI app.
 # Build from repository root with:
-#   python -m PyInstaller packaging\confluence-sync-gui.spec
+#   python -m PyInstaller packaging\confluence-export-desktop.spec
 
 block_cipher = None
 from pathlib import Path
@@ -35,7 +35,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="confluence-sync",
+    name="confluence-export-desktop",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -51,5 +51,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="confluence-sync",
+    name="confluence-export-desktop",
 )

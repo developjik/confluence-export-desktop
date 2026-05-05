@@ -1,10 +1,10 @@
-# CME Feature Support
+﻿# CME Feature Support
 
 기준일: 2026-05-05  
 기준 패키지: `confluence-markdown-exporter==4.1.1`
 최신 PRD: [PRD v1.0](PRD_v1.0.md)
 
-Confluence Sync Tool은 이제 internal exporter를 사용하지 않는다. 제품 경계는 “Python 없이 실행되는 CME GUI Job Runner”다.
+Confluence Export Desktop은 이제 internal exporter를 사용하지 않는다. 제품 경계는 “Python 없이 실행되는 CME GUI Job Runner”다.
 
 핵심 결론:
 
@@ -35,7 +35,7 @@ Confluence Sync Tool은 이제 internal exporter를 사용하지 않는다. 제�
 현재 GUI는 PySide6 기반이며 `연결`, `작업`, `작업 설정` 좌측 사이드바 섹션으로 구성된다.
 
 - `연결`: Confluence 기본 URL, 이메일, API 토큰 입력, `연결 테스트`, `저장 후 작업 만들기`, 저장된 토큰 삭제.
-- `작업`: 저장된 Job 목록, 선택한 작업 요약, 최근 동기화 표, `지금 동기화`, `편집`, `대상 폴더 열기`, `삭제`.
+- `작업`: 저장된 Job 목록, 선택한 작업 요약, 최근 내보내기 표, `지금 내보내기`, `편집`, `대상 폴더 열기`, `삭제`.
 - `작업 설정`: `기본 정보`, `CME 옵션`, `예약`, `고급 JSON` 하위 탭.
 
 GUI 작업 화면은 Run을 제공한다. Validate, Preview, Dry Run은 최종 사용자 GUI에 노출하지 않고 엔진/개발자 검증 경로로 유지한다.
@@ -121,7 +121,7 @@ CME-only 구조에서 Preview는 internal diff가 아니다. Preview/Dry Run은 
 
 - Job name, target directory, CME URL, CME scope, CME JSON 문법 검증
 - 실행 예정 scope와 URL 수 표시
-- 정확한 page-level create/update/skip/remove는 `Sync Now` 중 CME lockfile과 Confluence API 결과로 결정된다는 warning 표시
+- 정확한 page-level create/update/skip/remove는 `Export Now` 중 CME lockfile과 Confluence API 결과로 결정된다는 warning 표시
 
 이 방식은 CME 동작을 복제하지 않기 위한 의도적인 설계다.
 
@@ -132,7 +132,7 @@ The final-user build is GUI-first. Build the optional developer CLI with `script
 Page with descendants:
 
 ```powershell
-.\dist\confluence-sync-cli\confluence-sync-cli.exe add-job `
+.\dist\confluence-export-cli\confluence-export-cli.exe add-job `
   --name "Product Docs" `
   --url "https://company.atlassian.net/wiki/spaces/PROD/pages/123/Root" `
   --target-dir "C:\Users\developjik\Desktop\docs" `
@@ -142,7 +142,7 @@ Page with descendants:
 Space:
 
 ```powershell
-.\dist\confluence-sync-cli\confluence-sync-cli.exe add-job `
+.\dist\confluence-export-cli\confluence-export-cli.exe add-job `
   --name "PROD Space" `
   --url "https://company.atlassian.net/wiki/spaces/PROD" `
   --target-dir "C:\Users\developjik\Desktop\prod-space" `
@@ -152,7 +152,7 @@ Space:
 Org:
 
 ```powershell
-.\dist\confluence-sync-cli\confluence-sync-cli.exe add-job `
+.\dist\confluence-export-cli\confluence-export-cli.exe add-job `
   --name "Company Confluence" `
   --url "https://company.atlassian.net" `
   --target-dir "C:\Users\developjik\Desktop\company-confluence" `
@@ -162,7 +162,7 @@ Org:
 Common options:
 
 ```powershell
-.\dist\confluence-sync-cli\confluence-sync-cli.exe add-job `
+.\dist\confluence-export-cli\confluence-export-cli.exe add-job `
   --name "PROD Space" `
   --url "https://company.atlassian.net/wiki/spaces/PROD" `
   --target-dir "C:\Users\developjik\Desktop\prod-space" `

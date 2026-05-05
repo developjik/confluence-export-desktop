@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import getpass
@@ -176,7 +176,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="confluence-sync-cli")
+    parser = argparse.ArgumentParser(prog="confluence-export-cli")
     sub = parser.add_subparsers(dest="command", required=True)
     p = sub.add_parser("check")
     p.set_defaults(func=cmd_check)

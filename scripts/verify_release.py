@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import os
@@ -30,7 +30,7 @@ def run_command(args: list[str]) -> dict[str, object]:
 
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    built_gui = ROOT / "dist" / "confluence-sync" / "confluence-sync.exe"
+    built_gui = ROOT / "dist" / "confluence-export-desktop" / "confluence-export-desktop.exe"
     results = {
         "compileall": run_command([sys.executable, "-m", "compileall", "-q", "src", "tests", "scripts"]),
         "unittest": run_command([sys.executable, "-m", "unittest"]),

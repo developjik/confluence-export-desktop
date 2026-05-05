@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import hashlib
 import json
@@ -110,7 +110,7 @@ def format_plan_display(plan: dict[str, object]) -> str:
     summary = plan.get("summary") if isinstance(plan.get("summary"), dict) else {}
     warnings = plan.get("warnings") if isinstance(plan.get("warnings"), list) else []
     lines = [
-        "동기화 계획",
+        "내보내기 계획",
         f"계획 ID: {plan.get('plan_id', '')}",
         f"작업 ID: {plan.get('job_id', '')}",
         f"범위: {plan.get('scope', '')}",
@@ -218,7 +218,7 @@ def format_run_history_rows(runs: object, limit: int = RUN_HISTORY_LIMIT) -> lis
 
 def format_run_summary(run: object) -> str:
     if not isinstance(run, dict):
-        return "아직 동기화 기록이 없습니다."
+        return "아직 내보내기 기록이 없습니다."
     status = str(run.get("status") or "")
     status_label = {"success": "성공", "failed": "실패"}.get(status, status or "상태 없음")
     finished_at = _format_timestamp(run.get("finished_at") or run.get("started_at"))
@@ -263,7 +263,7 @@ class StatusBadge(QLabel):
         )
 
 
-class ConfluenceSyncApp(QMainWindow):
+class ConfluenceExportDesktopApp(QMainWindow):
     background_success = Signal(object)
     background_error = Signal(object)
     progress_message = Signal(str)
@@ -276,7 +276,7 @@ class ConfluenceSyncApp(QMainWindow):
         super().__init__()
         configure_application_font()
         ensure_app_dirs()
-        self.setWindowTitle("Confluence 문서 동기화")
+        self.setWindowTitle("Confluence 문서 내보내기")
         self.resize(1260, 860)
         self.setMinimumSize(1040, 720)
         self._set_window_icon()
@@ -324,7 +324,7 @@ class ConfluenceSyncApp(QMainWindow):
         side_rail_layout = QVBoxLayout(side_rail)
         side_rail_layout.setContentsMargins(14, 16, 14, 14)
         side_rail_layout.setSpacing(14)
-        brand = QLabel("Confluence Sync")
+        brand = QLabel("Confluence Export Desktop")
         brand.setObjectName("SidebarBrand")
         brand.setWordWrap(True)
         product_hint = QLabel("Markdown workspace")
@@ -354,9 +354,9 @@ class ConfluenceSyncApp(QMainWindow):
         header = QHBoxLayout()
         title_box = QVBoxLayout()
         title_box.setSpacing(3)
-        app_title = QLabel("Confluence 문서 동기화")
+        app_title = QLabel("Confluence 문서 내보내기")
         app_title.setObjectName("AppTitle")
-        subtitle = QLabel("Confluence 문서를 로컬 Markdown 작업으로 저장하고 수동/예약 동기화합니다.")
+        subtitle = QLabel("Confluence 문서를 로컬 Markdown 작업으로 저장하고 수동/예약 내보내기합니다.")
         subtitle.setObjectName("MutedLabel")
         subtitle.setWordWrap(True)
         title_box.addWidget(app_title)
@@ -479,7 +479,7 @@ class ConfluenceSyncApp(QMainWindow):
         right_layout = QVBoxLayout(right)
         detail_header = QHBoxLayout()
         detail_header.addWidget(self._title("선택한 작업"), 1)
-        self.sync_button = self._button("지금 동기화", "primary")
+        self.sync_button = self._button("지금 내보내기", "primary")
         self.sync_button.clicked.connect(self.run_selected)
         detail_header.addWidget(self.sync_button)
         right_layout.addLayout(detail_header)
@@ -516,7 +516,7 @@ class ConfluenceSyncApp(QMainWindow):
         divider = QFrame()
         divider.setFrameShape(QFrame.HLine)
         right_layout.addWidget(divider)
-        right_layout.addWidget(self._title("최근 동기화"))
+        right_layout.addWidget(self._title("최근 내보내기"))
         self.run_history_table = QTableWidget(0, 6)
         self.run_history_table.setHorizontalHeaderLabels(["한국시간", "결과", "문서", "삭제", "건너뜀", "오류"])
         self.run_history_table.verticalHeader().setVisible(False)
@@ -686,7 +686,7 @@ class ConfluenceSyncApp(QMainWindow):
         tab = QWidget()
         tab.setObjectName("TabSurface")
         layout = QVBoxLayout(tab)
-        layout.addWidget(self._section_header("예약 실행", "앱이 tray/background 상태로 실행 중일 때 예약된 시간에 같은 동기화 엔진을 실행합니다."))
+        layout.addWidget(self._section_header("예약 실행", "앱이 tray/background 상태로 실행 중일 때 예약된 시간에 같은 내보내기 엔진을 실행합니다."))
         layout.addWidget(self.schedule_enabled)
         self.schedule_enabled.stateChanged.connect(lambda _state: self.update_schedule_condition_visibility())
         form = QGridLayout()
@@ -878,7 +878,7 @@ class ConfluenceSyncApp(QMainWindow):
             icon = QStyle.StandardPixmap.SP_DialogSaveButton
         elif "열기" in text or "찾아보기" in text:
             icon = QStyle.StandardPixmap.SP_DirOpenIcon
-        elif "동기화" in text or "테스트" in text:
+        elif "내보내기" in text or "테스트" in text:
             icon = QStyle.StandardPixmap.SP_BrowserReload
         elif "새" in text or "만들기" in text or "추가" in text:
             icon = QStyle.StandardPixmap.SP_FileIcon
@@ -1291,7 +1291,7 @@ class ConfluenceSyncApp(QMainWindow):
             job = self.selected_job()
             engine = self._engine(self.threadsafe_progress)
             self.run_background(
-                "지금 동기화",
+                "지금 내보내기",
                 lambda: self.coordinator.run(job, lambda: engine.apply(job, trigger="manual")),
                 self.write_sync_result,
                 self.show_sync_error,
@@ -1373,7 +1373,7 @@ class ConfluenceSyncApp(QMainWindow):
             self.logout_button,
         ):
             widget.setEnabled(enabled)
-        self.sync_button.setText("동기화 중..." if running and label == "지금 동기화" else "지금 동기화")
+        self.sync_button.setText("내보내기 중..." if running and label == "지금 내보내기" else "지금 내보내기")
         self.test_connection_button.setText("테스트 중..." if running and label == "연결 테스트" else "연결 테스트")
         if running:
             self.save_create_button.setEnabled(False)
@@ -1474,7 +1474,7 @@ class ConfluenceSyncApp(QMainWindow):
         self.set_status_text("스케줄 일시정지" if self.global_schedule_paused else "스케줄 재개", "warning" if self.global_schedule_paused else "success")
 
     def start_background_runtime(self) -> None:
-        if os.environ.get("CONFLUENCE_SYNC_DISABLE_TRAY") == "1":
+        if os.environ.get("CONFLUENCE_EXPORT_DISABLE_TRAY") == "1":
             self.tray_available = False
             self.scheduler_runtime = SchedulerRuntime(
                 self.store.load,
@@ -1516,7 +1516,7 @@ class ConfluenceSyncApp(QMainWindow):
         self.update_job_details()
         if self.tray_runtime is not None:
             try:
-                self.tray_runtime.notify("Confluence Sync 예약 실패", f"{job.name}: {error.user_message}")
+                self.tray_runtime.notify("Confluence Export Desktop 예약 실패", f"{job.name}: {error.user_message}")
             except Exception:
                 pass
 
@@ -1557,7 +1557,7 @@ class ConfluenceSyncApp(QMainWindow):
         self.hide()
         if not self.close_notice_shown:
             self.close_notice_shown = True
-            QMessageBox.information(self, "Background 실행", "창을 닫아도 예약 동기화가 tray/background에서 계속 실행됩니다.")
+            QMessageBox.information(self, "Background 실행", "창을 닫아도 예약 내보내기가 tray/background에서 계속 실행됩니다.")
 
     def write_sync_text(self, text: str) -> None:
         self.set_status_text(mask_sensitive(text).strip().splitlines()[0])
@@ -1570,18 +1570,18 @@ class ConfluenceSyncApp(QMainWindow):
         skipped = int(summary.get("skipped", 0)) if isinstance(summary, dict) else 0
         errors = int(summary.get("errors", 0)) if isinstance(summary, dict) else 0
         if errors:
-            self.set_status_text("동기화 완료", "warning")
+            self.set_status_text("내보내기 완료", "warning")
             self.update_job_details()
-            QMessageBox.warning(self, "동기화 완료", "동기화가 끝났지만 오류가 기록되었습니다.")
+            QMessageBox.warning(self, "내보내기 완료", "내보내기가 끝났지만 오류가 기록되었습니다.")
             return
         exported = created + updated
-        self.set_status_text(f"동기화 성공 · 생성/업데이트 {exported} · 삭제 {deleted} · 건너뜀 {skipped}", "success")
+        self.set_status_text(f"내보내기 성공 · 생성/업데이트 {exported} · 삭제 {deleted} · 건너뜀 {skipped}", "success")
         self.update_job_details()
-        QMessageBox.information(self, "동기화 성공", "Confluence 문서 동기화가 완료되었습니다.")
+        QMessageBox.information(self, "내보내기 성공", "Confluence 문서 내보내기가 완료되었습니다.")
 
     def show_sync_error(self, exc: Exception) -> None:
         error = classify_exception(exc)
-        self.set_status_text("동기화 실패", "error")
+        self.set_status_text("내보내기 실패", "error")
         try:
             self.set_run_history_rows(format_job_run_history_rows(self.selected_job()))
         except Exception:
@@ -1858,7 +1858,7 @@ QCheckBox {{
 def main() -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     configure_application_font()
-    window = ConfluenceSyncApp()
+    window = ConfluenceExportDesktopApp()
     window.show()
     return int(app.exec())
 

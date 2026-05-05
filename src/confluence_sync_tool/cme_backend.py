@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import copy
 import json
@@ -177,7 +177,7 @@ def run_cme_export(job: Job, progress: ProgressCallback | None = None) -> CmeExp
     config = build_cme_config(job, token, settings)
     urls = cme_urls(job)
     scope = cme_scope(job)
-    with tempfile.TemporaryDirectory(prefix="confluence-sync-cme-") as temp_root:
+    with tempfile.TemporaryDirectory(prefix="confluence-export-cme-") as temp_root:
         config_path = Path(temp_root) / "app_data.json"
         write_cme_config(config_path, config)
         return execute_cme(scope, urls, config_path, progress)
@@ -195,7 +195,7 @@ def test_cme_connection(base_url: str, email: str, token: str) -> dict[str, obje
         "api_token": token,
         "pat": "",
     }
-    with tempfile.TemporaryDirectory(prefix="confluence-sync-cme-test-") as temp_root:
+    with tempfile.TemporaryDirectory(prefix="confluence-export-cme-test-") as temp_root:
         config_path = Path(temp_root) / "app_data.json"
         write_cme_config(config_path, config)
         previous_config = os.environ.get("CME_CONFIG_PATH")

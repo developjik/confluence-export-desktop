@@ -1,4 +1,4 @@
-# Cron Scheduling and Background Runtime
+﻿# Cron Scheduling and Background Runtime
 
 기준일: 2026-05-05
 상태: Future feature spec
@@ -11,13 +11,13 @@
 
 ## 1. Purpose
 
-Confluence Sync Tool은 현재 사용자가 GUI에서 Job을 만들고 `지금 동기화`를 눌러 수동 실행하는 구조다. 이후 예약 실행을 GUI에서 설정하려면, GUI 창을 닫은 뒤에도 예약된 Job을 실행할 수 있는 background runtime이 필요하다.
+Confluence Export Desktop은 현재 사용자가 GUI에서 Job을 만들고 `지금 내보내기`를 눌러 수동 실행하는 구조다. 이후 예약 실행을 GUI에서 설정하려면, GUI 창을 닫은 뒤에도 예약된 Job을 실행할 수 있는 background runtime이 필요하다.
 
 이 문서는 schedule 설정, background 실행, system tray 동작, Job 실행 정책의 제품/기술 계약을 먼저 정의한다. 실제 구현 문서는 이 계약을 기준으로 작성한다.
 
 이 문서에서 cron은 내부 scheduler 구현 개념을 가리킨다. 사용자는 `0 9 * * *` 같은 cron expression을 직접 입력하지 않는다.
 
-제품 관점에서 목표 상태는 "현재 앱의 수동 동기화 기능 + 예약 동기화 + tray/background 상주 실행"이다.
+제품 관점에서 목표 상태는 "현재 앱의 수동 내보내기 기능 + 예약 내보내기 + tray/background 상주 실행"이다.
 
 ## 1.1 Confirmed Decisions
 
@@ -39,7 +39,7 @@ Confluence Sync Tool은 현재 사용자가 GUI에서 Job을 만들고 `지금 �
 - GUI 창을 닫으면 앱 프로세스가 종료된다.
 - GUI의 background thread는 장시간 sync 중 화면 응답성을 유지하기 위한 작업 스레드이며, 앱 종료 후 상주하는 background runtime이 아니다.
 - CLI는 현재 login, job 관리, preview, dry-run, run을 제공하지만, 후속 GUI 제품에서는 최종 사용자 인터페이스에서 제거된다.
-- GUI는 현재 Sync Now 중심이다. 후속 GUI 제품에서는 인증, Job 관리, run, run history/log 확인, schedule 설정을 제공해야 한다. Validate, preview, dry-run은 GUI에 노출하지 않는다.
+- GUI는 현재 Export Now 중심이다. 후속 GUI 제품에서는 인증, Job 관리, run, run history/log 확인, schedule 설정을 제공해야 한다. Validate, preview, dry-run은 GUI에 노출하지 않는다.
 - 실제 sync 실행 로직은 `SyncEngine`과 CME adapter가 담당한다.
 
 ## 3. Problem
@@ -72,7 +72,7 @@ CLI 삭제 이후에는 Windows Task Scheduler가 CLI를 호출하는 방식도 
 | BG-NG-02 | 서버 또는 cloud-hosted scheduler를 만들지 않는다. |
 | BG-NG-03 | Confluence write-back 또는 양방향 sync를 포함하지 않는다. |
 | BG-NG-04 | 앱이 완전히 종료된 상태에서 자체적으로 실행되는 것을 보장하지 않는다. |
-| BG-NG-05 | 여러 PC 간 schedule 상태 동기화를 제공하지 않는다. |
+| BG-NG-05 | 여러 PC 간 schedule 상태 내보내기를 제공하지 않는다. |
 | BG-NG-06 | 1차 GUI에서 raw cron expression 입력을 제공하지 않는다. |
 | BG-NG-07 | 최종 사용자용 CLI backward compatibility를 보장하지 않는다. |
 | BG-NG-08 | Windows Task Scheduler 기반 외부 예약 실행을 1차 제품 경로로 제공하지 않는다. |
@@ -89,7 +89,7 @@ Expected behavior:
 - System tray icon은 유지된다.
 - Scheduler는 계속 실행된다.
 - 예약된 Job은 background 상태에서 계속 실행된다.
-- 첫 사용 시 "창을 닫아도 예약 동기화가 계속 실행됩니다" 안내를 표시할 수 있다.
+- 첫 사용 시 "창을 닫아도 예약 내보내기가 계속 실행됩니다" 안내를 표시할 수 있다.
 
 ### 6.2 Open From Tray
 
@@ -113,7 +113,7 @@ Expected behavior:
 
 ### 6.4 Manual Sync While Scheduler Is Active
 
-사용자는 schedule이 켜진 Job도 수동으로 `지금 동기화`할 수 있다.
+사용자는 schedule이 켜진 Job도 수동으로 `지금 내보내기`할 수 있다.
 
 Expected behavior:
 
@@ -225,7 +225,7 @@ Recommended event types:
 1차 구현은 GUI 프로세스 내부에 scheduler와 tray runtime을 둔다.
 
 ```text
-ConfluenceSyncApp
+ConfluenceExportDesktopApp
   - main GUI
   - job editor
   - schedule editor
@@ -329,7 +329,7 @@ Scheduler runtime state는 Job config와 분리한다.
 | --- | --- | --- |
 | Current running jobs | In-memory `RunCoordinator` | manual/scheduled run 모두 같은 lock registry를 사용한다. |
 | Global schedule pause | App settings | Tray menu의 일시정지/재개 상태를 저장한다. |
-| Scheduler event history | `%APPDATA%\ConfluenceSync\app\scheduler_events.jsonl` | skip/misfire/due/start/complete/fail event를 구조화된 JSONL로 기록한다. |
+| Scheduler event history | `%APPDATA%\ConfluenceExportDesktop\app\scheduler_events.jsonl` | skip/misfire/due/start/complete/fail event를 구조화된 JSONL로 기록한다. |
 | Job sync history | `<target-dir>\run_history.json` | 실제 `SyncEngine` 실행 결과만 기록한다. |
 | Job log | `<target-dir>\.logs\app.log` | 실제 실행 로그를 기록한다. |
 

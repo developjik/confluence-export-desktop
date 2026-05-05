@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import unittest
 
@@ -12,7 +12,7 @@ class StartupTests(unittest.TestCase):
 
     def test_windows_run_key_contract(self):
         self.assertIn("CurrentVersion\\Run", RUN_KEY)
-        self.assertEqual(RUN_VALUE, "ConfluenceSync")
+        self.assertEqual(RUN_VALUE, "ConfluenceExportDesktop")
 
 
 if __name__ == "__main__":

@@ -1,11 +1,11 @@
-param(
+﻿param(
     [ValidateSet("Package", "LiveConfluence", "All")]
     [string]$Mode = "Package",
 
-    [string]$BaseUrl = $env:CONFLUENCE_SYNC_BASE_URL,
-    [string]$Email = $env:CONFLUENCE_SYNC_EMAIL,
-    [string]$ApiToken = $env:CONFLUENCE_SYNC_API_TOKEN,
-    [string]$PageUrl = $env:CONFLUENCE_SYNC_PAGE_URL,
+    [string]$BaseUrl = $env:CONFLUENCE_EXPORT_BASE_URL,
+    [string]$Email = $env:CONFLUENCE_EXPORT_EMAIL,
+    [string]$ApiToken = $env:CONFLUENCE_EXPORT_API_TOKEN,
+    [string]$PageUrl = $env:CONFLUENCE_EXPORT_PAGE_URL,
 
     [string]$EvidenceDir,
     [switch]$NoGui,
@@ -301,7 +301,7 @@ function Get-PythonInstallSignal {
 function Test-PackageGate {
     param([string]$RootPath, [string]$Label)
 
-    $gui = Join-Path $RootPath "dist\confluence-sync\confluence-sync.exe"
+    $gui = Join-Path $RootPath "dist\confluence-export-desktop\confluence-export-desktop.exe"
     $cleanEnv = @{ PATH = (Get-System32Path) }
     $pythonSignal = Get-PythonInstallSignal
     $guiSmoke = Start-GuiSmoke -GuiExe $gui -ExtraEnv $cleanEnv -Seconds 5
@@ -335,8 +335,8 @@ function Copy-RelocatedDist {
         Remove-Item -LiteralPath $destinationRoot -Recurse -Force
     }
     New-Item -ItemType Directory -Force -Path $destinationDist | Out-Null
-    Copy-Item -LiteralPath (Join-Path $repo "dist\confluence-sync") -Destination $destinationDist -Recurse
-    $cliDist = Join-Path $repo "dist\confluence-sync-cli"
+    Copy-Item -LiteralPath (Join-Path $repo "dist\confluence-export-desktop") -Destination $destinationDist -Recurse
+    $cliDist = Join-Path $repo "dist\confluence-export-cli"
     if (Test-Path -LiteralPath $cliDist) {
         Copy-Item -LiteralPath $cliDist -Destination $destinationDist -Recurse
     }
@@ -345,10 +345,10 @@ function Copy-RelocatedDist {
 
 function Test-LiveConfluenceGate {
     $missing = @()
-    if (-not $BaseUrl) { $missing += "CONFLUENCE_SYNC_BASE_URL" }
-    if (-not $Email) { $missing += "CONFLUENCE_SYNC_EMAIL" }
-    if (-not $ApiToken) { $missing += "CONFLUENCE_SYNC_API_TOKEN" }
-    if (-not $PageUrl) { $missing += "CONFLUENCE_SYNC_PAGE_URL" }
+    if (-not $BaseUrl) { $missing += "CONFLUENCE_EXPORT_BASE_URL" }
+    if (-not $Email) { $missing += "CONFLUENCE_EXPORT_EMAIL" }
+    if (-not $ApiToken) { $missing += "CONFLUENCE_EXPORT_API_TOKEN" }
+    if (-not $PageUrl) { $missing += "CONFLUENCE_EXPORT_PAGE_URL" }
     if ($missing.Count -gt 0) {
         return [pscustomobject]@{
             ok = $false
@@ -357,7 +357,7 @@ function Test-LiveConfluenceGate {
         }
     }
 
-    $cli = Join-Path $repo "dist\confluence-sync-cli\confluence-sync-cli.exe"
+    $cli = Join-Path $repo "dist\confluence-export-cli\confluence-export-cli.exe"
     $systemDrive = $env:SystemDrive
     if (-not $systemDrive) {
         $systemDrive = "C:"

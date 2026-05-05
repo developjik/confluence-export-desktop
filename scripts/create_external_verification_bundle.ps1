@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$OutputDir,
     [string]$BundleName,
     [switch]$NoZip
@@ -11,7 +11,7 @@ if (-not $OutputDir) {
     $OutputDir = Join-Path $repo "docs\verification\external_bundle"
 }
 if (-not $BundleName) {
-    $BundleName = "confluence-sync-external-verification-" + (Get-Date -Format "yyyyMMdd-HHmmss")
+    $BundleName = "confluence-export-desktop-external-verification-" + (Get-Date -Format "yyyyMMdd-HHmmss")
 }
 
 function Copy-RequiredItem {
@@ -64,7 +64,7 @@ if (Test-Path -LiteralPath $bundleDir) {
 New-Item -ItemType Directory -Force -Path $bundleDir | Out-Null
 
 $items = @(
-    @{ source = "dist\confluence-sync"; destination = "dist\confluence-sync" },
+    @{ source = "dist\confluence-export-desktop"; destination = "dist\confluence-export-desktop" },
     @{ source = "scripts\create_external_verification_bundle.ps1"; destination = "scripts\create_external_verification_bundle.ps1" },
     @{ source = "scripts\import_external_evidence.ps1"; destination = "scripts\import_external_evidence.ps1" },
     @{ source = "scripts\verify_external_gates.ps1"; destination = "scripts\verify_external_gates.ps1" },
@@ -81,9 +81,9 @@ $items = @(
     @{ source = "docs\verification\completion_audit.md"; destination = "docs\verification\completion_audit.md" }
 )
 
-$optionalCliDist = Join-Path $repo "dist\confluence-sync-cli"
+$optionalCliDist = Join-Path $repo "dist\confluence-export-cli"
 if (Test-Path -LiteralPath $optionalCliDist) {
-    $items += @{ source = "dist\confluence-sync-cli"; destination = "dist\confluence-sync-cli" }
+    $items += @{ source = "dist\confluence-export-cli"; destination = "dist\confluence-export-cli" }
 }
 
 foreach ($item in $items) {
@@ -91,7 +91,7 @@ foreach ($item in $items) {
 }
 
 $readme = @'
-# Confluence Sync External Verification Bundle
+# Confluence Export Desktop External Verification Bundle
 
 This bundle contains the built GUI app and the verification materials needed for the external gates.
 
@@ -110,10 +110,10 @@ The clean VM gate is satisfied only when `external_gates.json` reports `python_i
 Set the following environment variables before live verification:
 
 ```powershell
-$env:CONFLUENCE_SYNC_BASE_URL = "https://company.atlassian.net"
-$env:CONFLUENCE_SYNC_EMAIL = "user@example.com"
-$env:CONFLUENCE_SYNC_API_TOKEN = "<token>"
-$env:CONFLUENCE_SYNC_PAGE_URL = "https://company.atlassian.net/wiki/spaces/SPACE/pages/123456"
+$env:CONFLUENCE_EXPORT_BASE_URL = "https://company.atlassian.net"
+$env:CONFLUENCE_EXPORT_EMAIL = "user@example.com"
+$env:CONFLUENCE_EXPORT_API_TOKEN = "<token>"
+$env:CONFLUENCE_EXPORT_PAGE_URL = "https://company.atlassian.net/wiki/spaces/SPACE/pages/123456"
 ```
 
 Then run one of:
@@ -171,6 +171,6 @@ $result = [ordered]@{
     zip_path = $zipPath
     manifest_path = $manifestPath
     file_count = $files.Count
-    gui_exe = (Join-Path $bundleDir "dist\confluence-sync\confluence-sync.exe")
+    gui_exe = (Join-Path $bundleDir "dist\confluence-export-desktop\confluence-export-desktop.exe")
 }
 $result | ConvertTo-Json -Depth 4

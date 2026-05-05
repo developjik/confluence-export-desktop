@@ -1,4 +1,4 @@
-{
+﻿{
   "generated_at": "2026-05-05T01:37:24+09:00",
   "baseline": "docs/PRD_v1.0.md",
   "mode": "cme-only",
@@ -46,8 +46,8 @@
       "evidence": [
         "scripts/build.ps1",
         "scripts/smoke_built_apps.py",
-        "dist/confluence-sync",
-        "dist/confluence-sync"
+        "dist/confluence-export-desktop",
+        "dist/confluence-export-desktop"
       ],
       "missing": "clean Windows VM without Python"
     },

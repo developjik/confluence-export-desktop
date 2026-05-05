@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import locale
@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-GUI = ROOT / "dist" / "confluence-sync" / "confluence-sync.exe"
+GUI = ROOT / "dist" / "confluence-export-desktop" / "confluence-export-desktop.exe"
 
 
 def decode_output(data: bytes | None) -> str:
@@ -41,7 +41,7 @@ def limited_env(appdata: str | None = None) -> dict[str, str]:
     keep["PATH"] = str(Path(system_root) / "System32")
     keep["PYTHONUTF8"] = "1"
     keep["PYTHONIOENCODING"] = "utf-8"
-    keep["CONFLUENCE_SYNC_DISABLE_TRAY"] = "1"
+    keep["CONFLUENCE_EXPORT_DISABLE_TRAY"] = "1"
     return keep
 
 

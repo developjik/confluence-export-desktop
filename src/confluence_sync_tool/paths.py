@@ -1,10 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 from pathlib import Path
 
 
-APP_NAME = "ConfluenceSync"
+APP_NAME = "ConfluenceExportDesktop"
 WORKSPACE_LOG_DIR_NAME = ".logs"
 
 

@@ -1,6 +1,6 @@
-# PyInstaller onedir spec for the support CLI.
+﻿# PyInstaller onedir spec for the support CLI.
 # Build from repository root with:
-#   python -m PyInstaller packaging\confluence-sync-cli.spec
+#   python -m PyInstaller packaging\confluence-export-cli.spec
 
 block_cipher = None
 from pathlib import Path
@@ -33,7 +33,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="confluence-sync-cli",
+    name="confluence-export-cli",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -49,5 +49,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="confluence-sync-cli",
+    name="confluence-export-cli",
 )

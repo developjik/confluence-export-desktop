@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import hashlib
 import json
@@ -13,7 +13,7 @@ import _path  # noqa: F401
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI = ROOT / "dist" / "confluence-sync-cli" / "confluence-sync-cli.exe"
+CLI = ROOT / "dist" / "confluence-export-cli" / "confluence-export-cli.exe"
 DEFAULT_EVIDENCE_ROOT = ROOT / "docs" / "verification" / "external_evidence"
 
 
@@ -43,10 +43,10 @@ def subprocess_env(appdata: Path) -> dict[str, str]:
 
 def required_env() -> tuple[dict[str, str], dict[str, str] | None]:
     keys = {
-        "CONFLUENCE_SYNC_BASE_URL": "Confluence Cloud base URL",
-        "CONFLUENCE_SYNC_EMAIL": "Confluence login email",
-        "CONFLUENCE_SYNC_API_TOKEN": "Confluence API token",
-        "CONFLUENCE_SYNC_PAGE_URL": "Confluence test page URL with at least two children",
+        "CONFLUENCE_EXPORT_BASE_URL": "Confluence Cloud base URL",
+        "CONFLUENCE_EXPORT_EMAIL": "Confluence login email",
+        "CONFLUENCE_EXPORT_API_TOKEN": "Confluence API token",
+        "CONFLUENCE_EXPORT_PAGE_URL": "Confluence test page URL with at least two children",
     }
     missing = [key for key in keys if not os.environ.get(key)]
     if missing:
@@ -163,9 +163,9 @@ def main() -> int:
         )
         return 1
 
-    token = env["CONFLUENCE_SYNC_API_TOKEN"]
+    token = env["CONFLUENCE_EXPORT_API_TOKEN"]
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    evidence_root = Path(os.environ.get("CONFLUENCE_SYNC_EVIDENCE_DIR", DEFAULT_EVIDENCE_ROOT))
+    evidence_root = Path(os.environ.get("CONFLUENCE_EXPORT_EVIDENCE_DIR", DEFAULT_EVIDENCE_ROOT))
     evidence_dir = evidence_root / f"{timestamp}-live-python"
     appdata = evidence_dir / "appdata"
     workspace = evidence_dir / "workspace"
@@ -178,7 +178,7 @@ def main() -> int:
     try:
         login = run_cli(
             "live-login",
-            [str(CLI), "login", "--base-url", env["CONFLUENCE_SYNC_BASE_URL"], "--email", env["CONFLUENCE_SYNC_EMAIL"], "--token-stdin", "--test"],
+            [str(CLI), "login", "--base-url", env["CONFLUENCE_EXPORT_BASE_URL"], "--email", env["CONFLUENCE_EXPORT_EMAIL"], "--token-stdin", "--test"],
             appdata,
             evidence_dir,
             token,
@@ -188,7 +188,7 @@ def main() -> int:
         commands.append(login)
         logged_in = login["returncode"] == 0
 
-        commands.append(run_cli("live-add-job", [str(CLI), "add-job", "--job-id", job_id, "--name", "Live Smoke", "--url", env["CONFLUENCE_SYNC_PAGE_URL"], "--target-dir", str(workspace), "--include-children"], appdata, evidence_dir, token, timeout=60))
+        commands.append(run_cli("live-add-job", [str(CLI), "add-job", "--job-id", job_id, "--name", "Live Smoke", "--url", env["CONFLUENCE_EXPORT_PAGE_URL"], "--target-dir", str(workspace), "--include-children"], appdata, evidence_dir, token, timeout=60))
         preview = run_cli("live-preview", [str(CLI), "preview", "--job", job_id], appdata, evidence_dir, token, timeout=120)
         commands.append(preview)
         before_dry_run_hash = tree_hash(workspace)

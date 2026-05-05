@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$IncludeCli
 )
 $ErrorActionPreference = "Stop"
@@ -22,18 +22,18 @@ if (-not $python) {
     throw "Python not found. Set PYTHON_EXE to a Python 3.11+ executable."
 }
 
-& $python -m PyInstaller --noconfirm packaging\confluence-sync-gui.spec
+& $python -m PyInstaller --noconfirm packaging\confluence-export-desktop.spec
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 if ($IncludeCli) {
-    & $python -m PyInstaller --noconfirm packaging\confluence-sync-cli.spec
+    & $python -m PyInstaller --noconfirm packaging\confluence-export-cli.spec
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
 }
 else {
-    $cliDist = Join-Path $repo "dist\confluence-sync-cli"
+    $cliDist = Join-Path $repo "dist\confluence-export-cli"
     if (Test-Path -LiteralPath $cliDist) {
         $resolvedCliDist = (Resolve-Path -LiteralPath $cliDist).Path
         $resolvedDist = (Resolve-Path -LiteralPath (Join-Path $repo "dist")).Path

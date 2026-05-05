@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 import unittest
@@ -52,7 +52,7 @@ class EngineTests(unittest.TestCase):
                 engine.dry_run(job)
                 after = tree_hash(job.workspace)
                 self.assertEqual(before, after)
-                app_log = appdata / "ConfluenceSync" / "logs" / "app.log"
+                app_log = appdata / "ConfluenceExportDesktop" / "logs" / "app.log"
                 self.assertTrue(app_log.exists())
                 self.assertIn("mode=dry_run", app_log.read_text(encoding="utf-8"))
                 self.assertFalse((workspace_log_dir(job.workspace) / "app.log").exists())
