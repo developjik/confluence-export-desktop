@@ -1,6 +1,6 @@
 # Verification Coverage Report
 
-Generated at: 2026-05-05T12:44:08+09:00
+Generated at: 2026-05-05T12:54:11+09:00
 
 - Mode: gui-background-runtime
 - OK: True
@@ -11,7 +11,7 @@ Generated at: 2026-05-05T12:44:08+09:00
 - cme_only_gui: GUI exposes CME Job options and no internal backend selector
 - cme_config_template: CME 4.1.1 export and connection_config options are present
 - dry_run_wrapper: Preview/Dry Run validate config and do not calculate internal page diffs
-- packaging: PyInstaller bundles GUI and confluence-markdown-exporter modules
+- packaging: PyInstaller bundles GUI and confluence-markdown-exporter modules; Inno Setup creates installer exe
 
 ## Command Results
 
@@ -20,6 +20,7 @@ Generated at: 2026-05-05T12:44:08+09:00
 - credential_manager_smoke: 0
 - built_gui_exists: 0
 - built_apps_smoke: 0
+- built_installer_exists: 0
 
 ## External Remaining
 

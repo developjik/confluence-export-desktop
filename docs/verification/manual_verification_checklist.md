@@ -29,24 +29,28 @@ To import returned evidence:
 
 ## PKG / Clean Windows Without Python
 
-Purpose: prove the default onedir GUI build runs on a user machine without Python, pip, repository checkout, or PATH configuration.
+Purpose: prove the installer EXE and default onedir GUI build run on a user machine without Python, pip, repository checkout, or PATH configuration.
 
 Required environment:
 
 - Clean Windows 10 or Windows 11 VM
 - No Python installation
-- Built `dist\confluence-export-desktop` folder, or the external verification bundle
+- Built `dist\ConfluenceExportDesktopSetup-0.1.0.exe`, plus `dist\confluence-export-desktop` folder or the external verification bundle
 
 Steps:
 
-1. Copy `dist\confluence-export-desktop` to the VM.
-2. Launch `dist\confluence-export-desktop\confluence-export-desktop.exe`.
-3. Move the onedir folder to a different path and repeat step 2.
-4. Optional: copy the repo `scripts` folder and run `.\scripts\verify_external_gates.ps1 -Mode Package`.
+1. Copy `dist\ConfluenceExportDesktopSetup-0.1.0.exe` to the VM.
+2. Run the installer.
+3. Launch `Confluence Export Desktop` from the Start menu.
+4. Confirm Windows Apps & Features shows an uninstall entry.
+5. Optional: copy `dist\confluence-export-desktop` and launch `dist\confluence-export-desktop\confluence-export-desktop.exe` as the portable fallback.
+6. Optional: copy the repo `scripts` folder and run `.\scripts\verify_external_gates.ps1 -Mode Package`.
 
 Pass criteria:
 
 - GUI opens without Python installed.
+- Installer completes and creates a Start menu entry.
+- Uninstall entry exists.
 - `연결`, `작업`, `작업 설정` sidebar sections are visible.
 - `Setup Checker` and `Logs` sections are not visible.
 - Moving the onedir folders does not break startup.
@@ -55,6 +59,7 @@ Pass criteria:
 Evidence to save:
 
 - Screenshot of GUI first screen
+- Screenshot of installer completion or Apps & Features entry
 - VM image/version note
 - Any antivirus/EDR warning note
 - Generated `external_gates.json`, if using the script

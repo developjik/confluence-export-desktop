@@ -50,7 +50,7 @@ Baseline: `docs/PRD_v1.0.md`
 | FR-CLI-04 preview/dry-run/run/validate | automated | parser tests, engine tests |  |
 | FR-CLI-05 JSON output | automated | `emit_json`, CLI smoke output |  |
 | FR-CLI-06 list-jobs | automated | `cmd_list_jobs`, parser tests |  |
-| PKG-01..04 packaging | local package smoke | PyInstaller GUI spec, optional CLI spec, `scripts\build.ps1`, built GUI smoke | clean Windows VM without Python |
+| PKG-01..05 packaging | local package smoke | PyInstaller GUI spec, optional CLI spec, Inno Setup installer spec, `scripts\build.ps1`, `scripts\build_installer.ps1`, built GUI and installer smoke | clean Windows VM without Python |
 | SEC-01..04 security | automated | token leak tests, temp CME config lifecycle, masking tests |  |
 
 ## Gates
@@ -64,8 +64,9 @@ Baseline: `docs/PRD_v1.0.md`
 | GATE-05 package includes CME | pass | PyInstaller hidden imports and optional built CLI `check` |  |
 | GATE-06 GUI launches | pass locally | built GUI smoke | clean VM confirmation |
 | GATE-07 token is not leaked | pass | security tests and credential smoke |  |
-| GATE-08 live Confluence export works | external remaining | `verify_external_gates.ps1 -Mode LiveConfluence` | real credentials |
-| GATE-09 clean Windows without Python works | external remaining | `verify_external_gates.ps1 -Mode Package` | clean VM |
+| GATE-08 installer builds | pass locally | `scripts\build_installer.ps1`, `scripts\smoke_installer.ps1` | clean VM installer confirmation |
+| GATE-09 live Confluence export works | external remaining | `verify_external_gates.ps1 -Mode LiveConfluence` | real credentials |
+| GATE-10 clean Windows without Python works | external remaining | `verify_external_gates.ps1 -Mode Package` | clean VM |
 
 ## Superseded Requirement Families
 

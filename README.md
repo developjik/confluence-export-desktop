@@ -13,7 +13,7 @@ Confluence Export Desktop lets a Windows user save and run repeatable Confluence
 - Local verification summary: [docs/verification/coverage_report.md](docs/verification/coverage_report.md)
 - External/manual verification: [docs/verification/manual_verification_checklist.md](docs/verification/manual_verification_checklist.md)
 
-New development and verification should use `docs/PRD_v1.0.md` for the MVP baseline and `docs/features/cron_background_runtime.md` for the GUI/background scheduling baseline.
+New development and verification should use `docs/PRD_v1.0.md` for the MVP baseline and `docs/features/cron_background_runtime.md` for the GUI/background scheduling baseline. GitHub Releases should publish the installer EXE as the primary asset.
 
 ## Repository Layout
 
@@ -22,7 +22,7 @@ New development and verification should use `docs/PRD_v1.0.md` for the MVP basel
 - `scripts` contains build, release verification, and external evidence helpers.
 - `packaging` contains PyInstaller specs. The GUI spec is the default release path; the CLI spec is retained for developer and live-smoke support.
 - `build`, `__pycache__`, and test/tool caches are generated artifacts and are ignored. They can be deleted at any time.
-- `dist` is also generated, but it may contain the current packaged app used by smoke verification and handoff testing.
+- `dist` is also generated, but it may contain the current packaged app, installer, and release assets used by smoke verification and handoff testing.
 
 ## What The App Owns
 
@@ -36,6 +36,7 @@ New development and verification should use `docs/PRD_v1.0.md` for the MVP basel
 - Preset schedule configuration and tray/background scheduler runtime
 - Run history and logs in the target workspace
 - PyInstaller onedir packaging for the GUI app. Developer CLI source and optional CLI packaging remain for automation/live-smoke support, but the default user build is GUI-only.
+- Inno Setup installer packaging for Release distribution as a single `Setup.exe`.
 
 ## What CME Owns
 
@@ -62,6 +63,21 @@ $env:PYTHON_EXE = $py
 & $py scripts\verify_release.py
 ```
 
+Build the Windows installer for GitHub Releases:
+
+```powershell
+.\scripts\build_installer.ps1 -Version 0.1.0
+.\scripts\smoke_installer.ps1 -Version 0.1.0
+```
+
+If Inno Setup 6 is not installed on the build PC:
+
+```powershell
+.\scripts\build_installer.ps1 -Version 0.1.0 -InstallInnoSetup
+```
+
+The installer output is `dist\ConfluenceExportDesktopSetup-0.1.0.exe`. Upload this file to GitHub Releases as the primary download. The ZIP/onedir output is only a portable fallback.
+
 Build the optional developer CLI only when a live CLI smoke or CLI package handoff is needed:
 
 ```powershell
@@ -70,7 +86,7 @@ Build the optional developer CLI only when a live CLI smoke or CLI package hando
 
 ## GUI Flow
 
-1. Run `dist\confluence-export-desktop\confluence-export-desktop.exe`.
+1. Install `dist\ConfluenceExportDesktopSetup-0.1.0.exe`, or run the portable app from `dist\confluence-export-desktop\confluence-export-desktop.exe`.
 2. On `연결`, enter Confluence base URL, email, and API token.
 3. Run `연결 테스트`. The token is not saved until the connection flow succeeds.
 4. Select `저장 후 작업 만들기`.

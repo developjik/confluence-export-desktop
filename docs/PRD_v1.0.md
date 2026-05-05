@@ -364,6 +364,7 @@ GUI / CLI
 | PKG-02 | CME package must be bundled. | GUI packaging collects `confluence_markdown_exporter`; optional built CLI can run `check` when included. |
 | PKG-03 | User PC must not need Python. | package gate passes on a clean Windows machine without Python. |
 | PKG-04 | Built GUI must launch. | smoke starts GUI and confirms the process remains running. |
+| PKG-05 | Release distribution must provide a Windows installer EXE. | `scripts\build_installer.ps1` creates `dist\ConfluenceExportDesktopSetup-<version>.exe`; installer smoke can install, launch, and uninstall from a temp directory. |
 
 ## 12. Security
 
@@ -398,8 +399,9 @@ Errors must expose user-facing and technical messages separately.
 | GATE-05 | package includes CME | packaging spec collects CME modules; optional built CLI `check` can be used when the CLI build is included |
 | GATE-06 | GUI launches | built GUI smoke passes |
 | GATE-07 | token is not leaked | credential and built-app smoke pass |
-| GATE-08 | live Confluence export works | external live credentials required |
-| GATE-09 | clean Windows without Python works | external clean machine required |
+| GATE-08 | installer builds | `scripts\build_installer.ps1` and `scripts\smoke_installer.ps1` |
+| GATE-09 | live Confluence export works | external live credentials required |
+| GATE-10 | clean Windows without Python works | external clean machine required |
 
 ## 15. Test Plan
 
