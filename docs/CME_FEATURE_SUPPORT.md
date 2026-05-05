@@ -32,11 +32,11 @@ Confluence Sync Tool은 이제 internal exporter를 사용하지 않는다. 제�
 
 ## Current GUI Surface
 
-현재 GUI는 `연결`, `작업`, `작업 설정` 탭으로 구성된다.
+현재 GUI는 PySide6 기반이며 `연결`, `작업`, `작업 설정` 좌측 사이드바 섹션으로 구성된다.
 
 - `연결`: Confluence 기본 URL, 이메일, API 토큰 입력, `연결 테스트`, `저장 후 작업 만들기`, 저장된 토큰 삭제.
 - `작업`: 저장된 Job 목록, 선택한 작업 요약, 최근 동기화 표, `지금 동기화`, `편집`, `대상 폴더 열기`, `삭제`.
-- `작업 설정`: `기본 정보`, `CME 옵션`, `고급 JSON` 하위 탭.
+- `작업 설정`: `기본 정보`, `CME 옵션`, `예약`, `고급 JSON` 하위 탭.
 
 GUI 작업 화면은 Run을 제공한다. Validate, Preview, Dry Run은 최종 사용자 GUI에 노출하지 않고 엔진/개발자 검증 경로로 유지한다.
 
@@ -60,8 +60,6 @@ GUI 작업 화면은 Run을 제공한다. Validate, Preview, Dry Run은 최종 �
 | `타임아웃(초)` | `connection_config.timeout`. |
 | `동시 작업 수` | `connection_config.max_workers`. |
 | `CME Config JSON` | CME 원본 config override. GUI 공통 옵션보다 우선한다. |
-
-`CME Cloud ID`는 일반 GUI 화면에서 숨긴다. 일반 API Token 인증에는 보통 필요하지 않고, Atlassian API Gateway/scoped token 같은 특수 인증에서만 사용한다. 필요 시 개발자용 내부 entrypoint 또는 고급 설정 경로로 유지한다.
 
 적용 우선순위:
 
@@ -90,7 +88,7 @@ GUI가 모든 주요 옵션을 노출하지만, CME의 전체 설정 표면은 `
 | `filename_encoding` | CME 기본 치환표 | 파일명 문자 치환 규칙. |
 | `filename_length` | `255` | 파일명 최대 길이. |
 | `filename_lowercase` | `false` | 경로/파일명 lowercase 강제. |
-| `include_document_title` | `true` | Markdown 상단 document title heading 포함. |
+| `include_document_title` | `false` | Markdown 상단 document title heading 포함. |
 | `enable_jira_enrichment` | `false` | Jira issue link enrichment. Jira 인증이 추가로 필요할 수 있어 기본값은 꺼둔다. |
 | `skip_unchanged` | `true` | Lockfile 기준 unchanged page skip. |
 | `cleanup_stale` | `true` | 이동/삭제된 page의 stale local file 정리. |
@@ -113,7 +111,7 @@ GUI가 모든 주요 옵션을 노출하지만, CME의 전체 설정 표면은 `
 
 ### `auth`
 
-Confluence auth는 앱이 Windows Credential Manager에서 읽어 실행 직전에 CME config로 주입한다. 사용자가 `CME Config JSON`에 `auth`를 넣을 수는 있지만, Confluence base URL에 대한 username/token/cloud_id는 실행 직전 값이 우선한다.
+Confluence auth는 앱이 Windows Credential Manager에서 읽어 실행 직전에 CME config로 주입한다. 사용자가 `CME Config JSON`에 `auth`를 넣을 수는 있지만, Confluence base URL에 대한 username/token 값은 실행 직전 값이 우선한다.
 
 Jira enrichment를 쓰려면 CME가 요구하는 Jira auth 구성이 별도로 필요할 수 있다.
 
@@ -128,6 +126,8 @@ CME-only 구조에서 Preview는 internal diff가 아니다. Preview/Dry Run은 
 이 방식은 CME 동작을 복제하지 않기 위한 의도적인 설계다.
 
 ## Developer CLI Examples
+
+The final-user build is GUI-first. Build the optional developer CLI with `scripts\build.ps1 -IncludeCli` before using the packaged examples below.
 
 Page with descendants:
 
@@ -204,6 +204,7 @@ Advanced JSON override:
 - `python -m unittest`
 - `scripts\build.ps1`
 - `python scripts\smoke_built_apps.py`
+- `scripts\build.ps1 -IncludeCli` only when a packaged developer CLI or live CLI smoke is required
 
 테스트는 다음을 확인한다.
 

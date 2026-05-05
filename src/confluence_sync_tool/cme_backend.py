@@ -32,7 +32,7 @@ DEFAULT_CME_CONFIG: dict[str, object] = {
         "filename_encoding": '"<":"_",">":"_",":":"_","\\"":"_","/":"_","\\\\":"_","|":"_","?":"_","*":"_","\\u0000":"_","[":"_","]":"_","\'":"_","`":"_"',
         "filename_length": 255,
         "filename_lowercase": False,
-        "include_document_title": True,
+        "include_document_title": False,
         "enable_jira_enrichment": False,
         "skip_unchanged": True,
         "cleanup_stale": True,
@@ -129,7 +129,6 @@ def build_cme_config(job: Job, token: str, settings: dict[str, object] | None = 
         "username": email,
         "api_token": token,
         "pat": "",
-        "cloud_id": str(job.export_options.get("cme_cloud_id", "")),
     }
     auth.setdefault("jira", {})  # type: ignore[union-attr]
     return config
@@ -143,7 +142,7 @@ def apply_common_job_options(config: dict[str, object], job: Job) -> None:
     attachment_href = str(job.export_options.get("attachment_href", "relative"))
     if attachment_href in {"absolute", "relative", "wiki"}:
         export["attachment_href"] = attachment_href  # type: ignore[index]
-    export["include_document_title"] = bool(job.export_options.get("include_document_title", True))  # type: ignore[index]
+    export["include_document_title"] = bool(job.export_options.get("include_document_title", False))  # type: ignore[index]
     export["attachment_export_all"] = bool(job.export_options.get("attachment_export_all", True))  # type: ignore[index]
     export["page_breadcrumbs"] = bool(job.export_options.get("page_breadcrumbs", True))  # type: ignore[index]
     export["page_properties_as_front_matter"] = bool(job.export_options.get("page_properties_as_front_matter", True))  # type: ignore[index]
@@ -184,7 +183,7 @@ def run_cme_export(job: Job, progress: ProgressCallback | None = None) -> CmeExp
         return execute_cme(scope, urls, config_path, progress)
 
 
-def test_cme_connection(base_url: str, email: str, token: str, cloud_id: str = "") -> dict[str, object]:
+def test_cme_connection(base_url: str, email: str, token: str) -> dict[str, object]:
     if not base_url.strip() or not email.strip() or not token.strip():
         raise AppError("Auth", "CME_AUTH_SETTINGS_REQUIRED", "Confluence auth settings are required.", "", False)
     config = copy.deepcopy(DEFAULT_CME_CONFIG)
@@ -195,7 +194,6 @@ def test_cme_connection(base_url: str, email: str, token: str, cloud_id: str = "
         "username": email,
         "api_token": token,
         "pat": "",
-        "cloud_id": cloud_id,
     }
     with tempfile.TemporaryDirectory(prefix="confluence-sync-cme-test-") as temp_root:
         config_path = Path(temp_root) / "app_data.json"

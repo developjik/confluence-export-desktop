@@ -41,6 +41,7 @@ def limited_env(appdata: str | None = None) -> dict[str, str]:
     keep["PATH"] = str(Path(system_root) / "System32")
     keep["PYTHONUTF8"] = "1"
     keep["PYTHONIOENCODING"] = "utf-8"
+    keep["CONFLUENCE_SYNC_DISABLE_TRAY"] = "1"
     return keep
 
 

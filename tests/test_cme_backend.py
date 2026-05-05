@@ -64,6 +64,7 @@ class CmeBackendTests(unittest.TestCase):
         }:
             self.assertIn(key, config["connection_config"])
         self.assertTrue(config["export"]["attachment_export_all"])
+        self.assertFalse(config["export"]["include_document_title"])
         self.assertFalse(config["export"]["enable_jira_enrichment"])
 
     def test_build_cme_config_merges_common_and_advanced_options_and_injects_credential(self):
@@ -95,6 +96,7 @@ class CmeBackendTests(unittest.TestCase):
             self.assertEqual(config["connection_config"]["max_workers"], 3)
             self.assertEqual(config["auth"]["confluence"]["https://company.atlassian.net"]["username"], "user@example.com")
             self.assertEqual(config["auth"]["confluence"]["https://company.atlassian.net"]["api_token"], "secret-token")
+            self.assertNotIn("cloud_id", config["auth"]["confluence"]["https://company.atlassian.net"])
 
     def test_validate_job_accepts_cme_org_and_multiple_urls(self):
         with temp_workspace() as root:

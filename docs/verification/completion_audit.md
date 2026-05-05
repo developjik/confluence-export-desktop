@@ -44,10 +44,10 @@ CME owns:
 Latest local coverage report: `docs\verification\coverage_report.md`
 
 - `compileall`: pass
-- `unittest`: pass, 41 tests
+- `unittest`: pass, 61 tests
 - source CLI `check`: pass
 - Credential Manager smoke: pass
-- built CLI `check`: pass
+- optional built CLI `check`: supported when built with `scripts\build.ps1 -IncludeCli`
 - built GUI exists: pass
 - built apps smoke: pass
 
@@ -60,7 +60,7 @@ The active verification docs no longer claim support for these superseded intern
 - app-owned manifest schema
 - app-owned conflict/deleted folders
 - page-level Preview diff
-- Setup Checker or Logs tabs in the GUI
+- Setup Checker or Logs sections in the GUI
 
 Those items remain mentioned only where they are explicitly documented as non-goals or superseded context.
 

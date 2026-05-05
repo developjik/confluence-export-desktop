@@ -81,6 +81,11 @@ $items = @(
     @{ source = "docs\verification\completion_audit.md"; destination = "docs\verification\completion_audit.md" }
 )
 
+$optionalCliDist = Join-Path $repo "dist\confluence-sync-cli"
+if (Test-Path -LiteralPath $optionalCliDist) {
+    $items += @{ source = "dist\confluence-sync-cli"; destination = "dist\confluence-sync-cli" }
+}
+
 foreach ($item in $items) {
     Copy-RequiredItem -Source (Join-Path $repo $item.source) -Destination (Join-Path $bundleDir $item.destination)
 }

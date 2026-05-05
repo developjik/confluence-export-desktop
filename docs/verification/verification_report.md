@@ -18,10 +18,10 @@ Latest generated coverage: [coverage_report.md](coverage_report.md)
 | Check | Result |
 | --- | --- |
 | `python -m compileall -q src tests scripts` | pass |
-| `python -m unittest` | pass, 41 tests |
+| `python -m unittest` | pass, 61 tests |
 | `python -m confluence_sync_tool.cli check` | pass |
 | `python scripts\credential_manager_smoke.py` | pass |
-| built CLI `check` | pass |
+| optional built CLI `check` | supported when built with `scripts\build.ps1 -IncludeCli` |
 | built GUI exists | pass |
 | `python scripts\smoke_built_apps.py` | pass |
 
@@ -33,7 +33,7 @@ Latest generated coverage: [coverage_report.md](coverage_report.md)
 - GUI and CLI expose CME job options and no internal backend selector.
 - CLI commands are `check`, `login`, `logout`, `list-jobs`, `add-job`, `preview`, `dry-run`, `run`, and `validate`.
 - Token storage uses Windows Credential Manager and smoke tests confirm token-stdin output does not leak the sentinel token.
-- Built CLI imports the CME package from the PyInstaller bundle.
+- The optional built CLI can import the CME package from the PyInstaller bundle when built with `-IncludeCli`.
 - Built GUI launches from `dist\confluence-sync\confluence-sync.exe`.
 
 ## Release Gate Status

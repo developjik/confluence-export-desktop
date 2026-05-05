@@ -4,7 +4,7 @@
   "mode": "cme-only",
   "summary": {
     "local_verification_status": "pass",
-    "product_boundary": "Windows GUI/CLI runner for confluence-markdown-exporter==4.1.1",
+    "product_boundary": "Windows GUI runner with optional developer CLI support for confluence-markdown-exporter==4.1.1",
     "superseded_boundary_removed": [
       "internal exporter",
       "internal manifest",
@@ -23,7 +23,7 @@
     "unittest": "pass",
     "source_cli_check": "pass",
     "credential_manager_smoke": "pass",
-    "built_cli_check": "pass",
+    "optional_built_cli_check": "supported with scripts/build.ps1 -IncludeCli",
     "built_gui_exists": "pass",
     "built_apps_smoke": "pass"
   },
@@ -31,10 +31,10 @@
     "SyncEngine uses the CME exporter adapter for apply.",
     "Preview and Dry Run validate Job/CME config/target path and do not compute an internal page diff.",
     "Dry Run preserves workspace content.",
-    "GUI and CLI expose CME job options and no internal backend selector.",
+    "GUI and developer CLI expose CME job options and no internal backend selector.",
     "CLI commands include check, login, logout, list-jobs, add-job, preview, dry-run, run, and validate.",
     "Token storage uses Windows Credential Manager and token-stdin smoke output does not leak the sentinel token.",
-    "Built CLI imports the CME package from the PyInstaller bundle.",
+    "Optional built CLI imports the CME package from the PyInstaller bundle when built with -IncludeCli.",
     "Built GUI launches from dist/confluence-sync/confluence-sync.exe."
   ],
   "release_gates": {

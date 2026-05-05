@@ -14,7 +14,7 @@
       "FR-CONFLICT app-owned conflict preservation",
       "FR-DELETE app-owned deleted folder",
       "internal manifest gates",
-      "Setup Checker and Logs tabs"
+      "Setup Checker and Logs sections"
     ]
   },
   "requirements": {
@@ -47,7 +47,7 @@
         "scripts/build.ps1",
         "scripts/smoke_built_apps.py",
         "dist/confluence-sync",
-        "dist/confluence-sync-cli"
+        "dist/confluence-sync"
       ],
       "missing": "clean Windows VM without Python"
     },
@@ -194,7 +194,7 @@
     "GATE-05": {
       "status": "pass",
       "evidence": [
-        "built CLI check reports CME package import ok"
+        "PyInstaller hidden imports plus optional built CLI check"
       ]
     },
     "GATE-06": {

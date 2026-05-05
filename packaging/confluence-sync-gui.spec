@@ -1,4 +1,4 @@
-# PyInstaller onedir spec for the GUI app.
+# PyInstaller onedir spec for the PySide6 GUI app.
 # Build from repository root with:
 #   python -m PyInstaller packaging\confluence-sync-gui.spec
 
@@ -19,7 +19,7 @@ a = Analysis(
         (str(ASSETS / "app-32.png"), "confluence_sync_tool/assets"),
         (str(ASSETS / "app-256.png"), "confluence_sync_tool/assets"),
     ],
-    hiddenimports=["tkinter", *collect_submodules("confluence_markdown_exporter")],
+    hiddenimports=[*collect_submodules("confluence_markdown_exporter")],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

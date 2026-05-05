@@ -4,5 +4,6 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 build/
+dist/
 docs/verification/external_evidence/
 docs/verification/external_bundle/

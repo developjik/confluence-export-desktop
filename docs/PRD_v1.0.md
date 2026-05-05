@@ -187,13 +187,13 @@ Confluence Sync Tool은 사용자가 Confluence page, page tree, space, organiza
 
 | ID | Requirement | Acceptance Criteria |
 | --- | --- | --- |
-| FR-GUI-01 | GUI는 연결, 작업, 작업 설정 탭을 제공해야 한다. | Setup Checker와 Logs 탭 없이 인증 저장 후 Job 등록 흐름이 source와 smoke에서 확인된다. |
+| FR-GUI-01 | GUI는 연결, 작업, 작업 설정 섹션을 제공해야 한다. | Setup Checker와 Logs 섹션 없이 인증 저장 후 Job 등록 흐름이 source와 smoke에서 확인된다. |
 | FR-GUI-02 | 작업 설정 화면은 CME 옵션을 노출해야 한다. | internal backend selector가 없다. |
 | FR-GUI-03 | GUI의 Sync Now는 background thread에서 실행되어야 한다. | GUI가 장시간 작업 중 응답 불능 상태가 되지 않고, 실행 중에는 지금 동기화 버튼이 동기화 중...으로 바뀌며 충돌 가능한 작업 버튼이 비활성화된다. |
-| FR-GUI-04 | 연결 탭은 인증 저장 후 Job 등록 화면으로 바로 이동할 수 있어야 한다. | 저장 후 작업 만들기로 Credential Manager 저장 후 작업 설정 화면이 열린다. |
-| FR-GUI-05 | 작업 탭은 테이블, 선택한 작업 요약, 주요 실행 action을 한 화면에 제공해야 한다. | 선택한 Job의 작업명, 범위, 저장 폴더, URL이 라벨-값 행으로 표시되고 목록 상단에는 새 작업만 표시된다. |
-| FR-GUI-06 | 작업 설정 화면은 기본 정보, CME 옵션, 고급 JSON으로 입력을 분리해야 한다. | 일반 설정과 raw CME JSON 편집이 섞이지 않는다. |
-| FR-GUI-07 | GUI의 사용자-facing 라벨과 핵심 안내 문구는 한국어로 제공해야 한다. | Confluence/CME 고유 용어를 제외한 탭, 버튼, 필드명, 짧은 안내문이 한국어다. |
+| FR-GUI-04 | 연결 섹션은 인증 저장 후 Job 등록 화면으로 바로 이동할 수 있어야 한다. | 저장 후 작업 만들기로 Credential Manager 저장 후 작업 설정 화면이 열린다. |
+| FR-GUI-05 | 작업 섹션은 테이블, 선택한 작업 요약, 주요 실행 action을 한 화면에 제공해야 한다. | 선택한 Job의 작업명, 범위, 저장 폴더, URL이 라벨-값 행으로 표시되고 목록 상단에는 새 작업만 표시된다. |
+| FR-GUI-06 | 작업 설정 화면은 기본 정보, CME 옵션, 예약, 고급 JSON으로 입력을 분리해야 한다. | 일반 설정과 raw CME JSON 편집이 섞이지 않는다. |
+| FR-GUI-07 | GUI의 사용자-facing 라벨과 핵심 안내 문구는 한국어로 제공해야 한다. | Confluence/CME 고유 용어를 제외한 섹션, 버튼, 필드명, 짧은 안내문이 한국어다. |
 | FR-GUI-08 | 연결 화면의 동작은 테스트, 저장/작업 생성, 계정 관리 영역으로 분리해야 한다. | 연결 테스트, 저장 후 작업 만들기, 저장된 토큰 삭제 버튼이 서로 다른 영역에 표시된다. |
 | FR-GUI-09 | 연결 테스트 결과는 별도 상태 패널 없이 알림과 버튼 활성 상태로 제공해야 한다. | 성공/실패 시 알림이 표시되고, 성공한 입력값에서만 저장 후 작업 만들기 버튼이 활성화된다. |
 | FR-GUI-10 | 작업 화면의 직접 action은 지금 동기화, 편집, 대상 폴더 열기, 삭제만 제공해야 한다. | Preview/Dry Run 버튼은 GUI 작업 화면에 표시하지 않는다. |
@@ -227,14 +227,13 @@ Confluence Sync Tool은 사용자가 Confluence page, page tree, space, organiza
   "export_options": {
     "cme_scope": "pages-with-descendants",
     "cme_urls": "https://company.atlassian.net/wiki/spaces/PROD/pages/123456/Root",
-    "cme_cloud_id": "",
     "cme_config_json": "{}",
     "page_href": "relative",
     "attachment_href": "relative",
     "attachment_export_all": true,
     "page_breadcrumbs": true,
     "page_properties_as_front_matter": true,
-    "include_document_title": true,
+    "include_document_title": false,
     "enable_jira_enrichment": false,
     "skip_unchanged": true,
     "cleanup_stale": true,
@@ -361,8 +360,8 @@ GUI / CLI
 
 | ID | Requirement | Acceptance Criteria |
 | --- | --- | --- |
-| PKG-01 | GUI and CLI must be built as PyInstaller onedir apps. | `dist\confluence-sync\confluence-sync.exe` and `dist\confluence-sync-cli\confluence-sync-cli.exe` exist. |
-| PKG-02 | CME package must be bundled. | built CLI `check` reports `CME package import ok`. |
+| PKG-01 | The GUI must be built as the default PyInstaller onedir app; the CLI is an optional developer/support build. | `dist\confluence-sync\confluence-sync.exe` exists after `scripts\build.ps1`; `dist\confluence-sync-cli\confluence-sync-cli.exe` exists only when built with `-IncludeCli`. |
+| PKG-02 | CME package must be bundled. | GUI packaging collects `confluence_markdown_exporter`; optional built CLI can run `check` when included. |
 | PKG-03 | User PC must not need Python. | package gate passes on a clean Windows machine without Python. |
 | PKG-04 | Built GUI must launch. | smoke starts GUI and confirms the process remains running. |
 
@@ -394,9 +393,9 @@ Errors must expose user-facing and technical messages separately.
 | --- | --- | --- |
 | GATE-01 | compile succeeds | `python -m compileall -q src tests scripts` |
 | GATE-02 | unit tests pass | `python -m unittest` |
-| GATE-03 | built apps pass smoke | `python scripts\smoke_built_apps.py` |
+| GATE-03 | built GUI app passes smoke | `python scripts\smoke_built_apps.py` |
 | GATE-04 | release verifier passes | `python scripts\verify_release.py` |
-| GATE-05 | package includes CME | built CLI `check` returns `CME package import ok` |
+| GATE-05 | package includes CME | packaging spec collects CME modules; optional built CLI `check` can be used when the CLI build is included |
 | GATE-06 | GUI launches | built GUI smoke passes |
 | GATE-07 | token is not leaked | credential and built-app smoke pass |
 | GATE-08 | live Confluence export works | external live credentials required |
@@ -419,16 +418,16 @@ Errors must expose user-facing and technical messages separately.
 | IT-ENGINE-04 | failed CME run records error |
 | IT-GUI-01 | GUI source exposes CME controls and no backend selector |
 | IT-CLI-01 | CLI exposes CME options and no backend argument |
-| PKG-01 | built CLI check |
-| PKG-02 | built GUI launch |
+| PKG-01 | built GUI launch |
+| PKG-02 | optional built CLI check when `-IncludeCli` is used |
 
 ## 16. Release Criteria
 
 Release is acceptable when:
 
 - all local validation gates pass,
-- GUI/CLI expose no internal backend path,
-- CME package import works in built CLI,
+- GUI and developer CLI expose no internal backend path,
+- CME package import is covered by GUI packaging and optional built CLI checks,
 - built GUI launches,
 - built app smoke passes,
 - external live Confluence verification is either passed or explicitly marked as remaining external evidence,

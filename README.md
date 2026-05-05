@@ -15,9 +15,18 @@ Confluence Sync Tool lets a Windows user save and run repeatable Confluence expo
 
 New development and verification should use `docs/PRD_v1.0.md` for the MVP baseline and `docs/features/cron_background_runtime.md` for the GUI/background scheduling baseline.
 
+## Repository Layout
+
+- Runtime source lives under `src/confluence_sync_tool`.
+- `tests` contains the local unit and GUI/CLI source-contract tests.
+- `scripts` contains build, release verification, and external evidence helpers.
+- `packaging` contains PyInstaller specs. The GUI spec is the default release path; the CLI spec is retained for developer and live-smoke support.
+- `build`, `__pycache__`, and test/tool caches are generated artifacts and are ignored. They can be deleted at any time.
+- `dist` is also generated, but it may contain the current packaged app used by smoke verification and handoff testing.
+
 ## What The App Owns
 
-- Windows GUI with `연결`, `작업`, `작업 설정` tabs
+- PySide6 Windows GUI with `연결`, `작업`, `작업 설정` sidebar sections
 - GUI actions for login/logout, job management, manual run, and scheduled run
 - Job storage under `%APPDATA%\ConfluenceSync\app`
 - Windows Credential Manager token storage
@@ -26,7 +35,7 @@ New development and verification should use `docs/PRD_v1.0.md` for the MVP basel
 - Sync Now execution through the CME adapter
 - Preset schedule configuration and tray/background scheduler runtime
 - Run history and logs in the target workspace
-- PyInstaller onedir packaging for the GUI app. Developer CLI source may remain, but the default user build is GUI-only.
+- PyInstaller onedir packaging for the GUI app. Developer CLI source and optional CLI packaging remain for automation/live-smoke support, but the default user build is GUI-only.
 
 ## What CME Owns
 
@@ -51,6 +60,12 @@ $env:PYTHON_EXE = $py
 .\scripts\build.ps1
 & $py scripts\smoke_built_apps.py
 & $py scripts\verify_release.py
+```
+
+Build the optional developer CLI only when a live CLI smoke or CLI package handoff is needed:
+
+```powershell
+.\scripts\build.ps1 -IncludeCli
 ```
 
 ## GUI Flow

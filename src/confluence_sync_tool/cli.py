@@ -78,7 +78,7 @@ def cmd_login(args: argparse.Namespace) -> int:
     key = store.write(args.base_url, args.email, token)
     save_settings(args.base_url, args.email)
     if args.test:
-        result = test_cme_connection(args.base_url, args.email, token, args.cme_cloud_id or "")
+        result = test_cme_connection(args.base_url, args.email, token)
     else:
         result = {"ok": True, "account": "not tested"}
     emit_json({"ok": True, "credential_key": key, "connection": result})
@@ -117,7 +117,6 @@ def cmd_add_job(args: argparse.Namespace) -> int:
         {
             "cme_scope": args.cme_scope,
             "cme_urls": args.cme_urls or args.url,
-            "cme_cloud_id": args.cme_cloud_id or "",
             "cme_config_json": args.cme_config_json or default_cme_config_json(args.target_dir),
             "page_href": args.page_href,
             "attachment_href": args.attachment_href,
@@ -186,7 +185,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--email", required=True)
     p.add_argument("--token")
     p.add_argument("--token-stdin", action="store_true", help="Read API token from stdin instead of command-line arguments.")
-    p.add_argument("--cme-cloud-id", help="Optional Atlassian Cloud ID for CME API gateway support.")
     p.add_argument("--test", action="store_true")
     p.set_defaults(func=cmd_login)
     p = sub.add_parser("logout")
@@ -201,7 +199,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--include-children", action=argparse.BooleanOptionalAction, default=True)
     p.add_argument("--cme-scope", choices=("auto", "pages", "pages-with-descendants", "spaces", "orgs"), default=str(DEFAULT_EXPORT_OPTIONS["cme_scope"]))
     p.add_argument("--cme-urls", help="Whitespace, comma, or newline separated URLs. Defaults to --url.")
-    p.add_argument("--cme-cloud-id", help="Optional Atlassian Cloud ID for CME API gateway support.")
     p.add_argument("--cme-config-json", help="Advanced CME config JSON. Values override common GUI/developer CLI options.")
     p.add_argument("--page-href", choices=("absolute", "relative", "wiki"), default=str(DEFAULT_EXPORT_OPTIONS["page_href"]))
     p.add_argument("--attachment-href", choices=("absolute", "relative", "wiki"), default=str(DEFAULT_EXPORT_OPTIONS["attachment_href"]))

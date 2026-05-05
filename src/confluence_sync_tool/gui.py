@@ -5,14 +5,44 @@ import json
 import os
 import sys
 import threading
-import tkinter as tk
+import copy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
 from typing import Callable
 
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QCloseEvent, QFont, QFontDatabase, QIcon
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QSpinBox,
+    QSplitter,
+    QStackedWidget,
+    QStyle,
+    QTableWidget,
+    QTableWidgetItem,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
 from .cli import _credential_store
-from .cme_backend import CME_SCOPES, default_cme_config_json, test_cme_connection
+from .cme_backend import CME_SCOPES, DEFAULT_CME_CONFIG, apply_common_job_options, deep_merge, default_cme_config_json, parse_cme_config_json, test_cme_connection
 from .engine import SyncEngine
 from .errors import AppError, classify_exception
 from .models import DEFAULT_EXPORT_OPTIONS, DEFAULT_SCHEDULE, Job, normalize_schedule
@@ -39,14 +69,20 @@ HOUR_VALUES = tuple(f"{hour:02d}" for hour in range(24))
 MINUTE_VALUES = ("00", "15", "30", "45")
 KOREA_TZ = timezone(timedelta(hours=9), "KST")
 RUN_HISTORY_LIMIT = 10
-BG = "#f6f7f9"
+BG = "#f4f6f8"
 SURFACE = "#ffffff"
 BORDER = "#d8dee8"
 TEXT = "#1f2937"
 MUTED = "#667085"
 ACCENT = "#2563eb"
+ACCENT_DARK = "#1d4ed8"
+FOCUS = "#84a9ff"
 DANGER = "#b42318"
-MONO = ("Consolas", 10)
+SUCCESS = "#067647"
+WARNING = "#b54708"
+MONO = "Consolas"
+APP_FONT = "Malgun Gothic"
+_APP_FONT_CONFIGURED = False
 
 
 def _asset_path(name: str) -> Path:
@@ -54,6 +90,19 @@ def _asset_path(name: str) -> Path:
     if hasattr(sys, "_MEIPASS"):
         return base / "confluence_sync_tool" / "assets" / name
     return base / "assets" / name
+
+
+def configure_application_font() -> None:
+    global _APP_FONT_CONFIGURED
+    app = QApplication.instance()
+    if app is None or _APP_FONT_CONFIGURED:
+        return
+    for font_path in (Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "malgun.ttf", Path("C:/Windows/Fonts/malgun.ttf")):
+        if font_path.exists():
+            QFontDatabase.addApplicationFont(str(font_path))
+            break
+    app.setFont(QFont(APP_FONT, 10))
+    _APP_FONT_CONFIGURED = True
 
 
 def format_plan_display(plan: dict[str, object]) -> str:
@@ -194,505 +243,693 @@ def format_job_run_history_rows(job: Job) -> list[tuple[str, str, str, str, str,
     return format_run_history_rows(runs)
 
 
-class ConfluenceSyncApp(tk.Tk):
+class StatusBadge(QLabel):
+    def __init__(self, text: str = "준비됨", tone: str = "info") -> None:
+        super().__init__(text)
+        self.setObjectName("StatusBadge")
+        self.set_tone(tone)
+
+    def set_tone(self, tone: str) -> None:
+        palette = {
+            "info": ("#eef4ff", "#1849a9"),
+            "success": ("#ecfdf3", SUCCESS),
+            "warning": ("#fffaeb", WARNING),
+            "error": ("#fef3f2", DANGER),
+            "muted": ("#f2f4f7", MUTED),
+        }.get(tone, ("#eef4ff", "#1849a9"))
+        self.setStyleSheet(
+            f"QLabel#StatusBadge {{ background: {palette[0]}; color: {palette[1]};"
+            " border-radius: 12px; padding: 5px 10px; font-weight: 600; }"
+        )
+
+
+class ConfluenceSyncApp(QMainWindow):
+    background_success = Signal(object)
+    background_error = Signal(object)
+    progress_message = Signal(str)
+    show_window_requested = Signal()
+    quit_requested = Signal()
+    toggle_pause_requested = Signal()
+    scheduled_failure = Signal(object, object)
+
     def __init__(self) -> None:
         super().__init__()
+        configure_application_font()
         ensure_app_dirs()
-        self.title("Confluence 문서 동기화")
-        self.geometry("1260x860")
-        self.minsize(1040, 720)
-        self.configure(background=BG)
+        self.setWindowTitle("Confluence 문서 동기화")
+        self.resize(1260, 860)
+        self.setMinimumSize(1040, 720)
         self._set_window_icon()
         self.store = JobStore()
         self.editing_job_id: str | None = None
         self.connection_verified_fingerprint: str | None = None
         self.busy = False
+        self.current_worker_label = ""
+        self.current_success: Callable[[object], None] | None = None
+        self.current_error: Callable[[Exception], None] | None = None
         settings = load_settings()
-        self.global_schedule_paused = tk.BooleanVar(value=bool(settings.get("schedule_paused")))
-        self.auto_start = tk.BooleanVar(value=bool(settings.get("auto_start")))
         self.coordinator = RunCoordinator(global_worker_limit=int(settings.get("global_worker_limit") or 1))
         self.scheduler_runtime: SchedulerRuntime | None = None
         self.tray_runtime: TrayRuntime | None = None
         self.tray_available = False
         self.close_notice_shown = False
-        self.status_text = tk.StringVar(value="준비됨")
+        self.global_schedule_paused = bool(settings.get("schedule_paused"))
+        self.auto_start = bool(settings.get("auto_start"))
+
+        self.background_success.connect(self.finish_background_success)
+        self.background_error.connect(self.finish_background_error)
+        self.progress_message.connect(self.set_status_text)
+        self.show_window_requested.connect(self.show_from_tray)
+        self.quit_requested.connect(self.quit_from_tray)
+        self.toggle_pause_requested.connect(self.toggle_pause_from_tray)
+        self.scheduled_failure.connect(self.notify_scheduled_failure)
+
         self._build()
-        self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.refresh_jobs()
         self.start_background_runtime()
 
     def _set_window_icon(self) -> None:
         icon = _asset_path("app.ico")
-        if not icon.exists():
-            return
-        try:
-            self.iconbitmap(str(icon))
-        except tk.TclError:
-            pass
-        try:
-            self.iconbitmap(default=str(icon))
-        except tk.TclError:
-            pass
+        if icon.exists():
+            self.setWindowIcon(QIcon(str(icon)))
 
     def _build(self) -> None:
-        self._apply_style()
-        shell = ttk.Frame(self, style="App.TFrame", padding=(16, 14, 16, 10))
-        shell.pack(fill="both", expand=True)
+        self.setStyleSheet(APP_STYLESHEET)
+        root = QWidget()
+        layout = QHBoxLayout(root)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        side_rail = QFrame()
+        side_rail.setObjectName("SidebarFrame")
+        side_rail_layout = QVBoxLayout(side_rail)
+        side_rail_layout.setContentsMargins(14, 16, 14, 14)
+        side_rail_layout.setSpacing(14)
+        brand = QLabel("Confluence Sync")
+        brand.setObjectName("SidebarBrand")
+        brand.setWordWrap(True)
+        product_hint = QLabel("Markdown workspace")
+        product_hint.setObjectName("SidebarHint")
+        side_rail_layout.addWidget(brand)
+        side_rail_layout.addWidget(product_hint)
+        self.sidebar = QListWidget()
+        self.sidebar.setObjectName("Sidebar")
+        self.sidebar.setFixedWidth(184)
+        self.sidebar.setSpacing(4)
+        self.sidebar.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        for text in ("연결", "작업", "작업 설정"):
+            item = QListWidgetItem(text)
+            item.setSizeHint(QSize(0, 46))
+            self.sidebar.addItem(item)
+        self.sidebar.currentRowChanged.connect(self.show_page)
+        side_rail_layout.addWidget(self.sidebar, 1)
+        sidebar_footer = QLabel("Local-first · KST")
+        sidebar_footer.setObjectName("SidebarHint")
+        side_rail_layout.addWidget(sidebar_footer)
+        layout.addWidget(side_rail)
 
-        header = ttk.Frame(shell, style="App.TFrame")
-        header.pack(fill="x", pady=(0, 12))
-        ttk.Label(header, text="Confluence 문서 동기화", style="AppTitle.TLabel").pack(side="left")
-        ttk.Label(header, textvariable=self.status_text, style="Status.TLabel").pack(side="right")
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(26, 22, 26, 22)
+        content_layout.setSpacing(16)
+        header = QHBoxLayout()
+        title_box = QVBoxLayout()
+        title_box.setSpacing(3)
+        app_title = QLabel("Confluence 문서 동기화")
+        app_title.setObjectName("AppTitle")
+        subtitle = QLabel("Confluence 문서를 로컬 Markdown 작업으로 저장하고 수동/예약 동기화합니다.")
+        subtitle.setObjectName("MutedLabel")
+        subtitle.setWordWrap(True)
+        title_box.addWidget(app_title)
+        title_box.addWidget(subtitle)
+        header.addLayout(title_box, 1)
+        self.status_badge = StatusBadge("준비됨", "info")
+        self.status_badge.setMinimumWidth(104)
+        header.addWidget(self.status_badge, 0, Qt.AlignTop)
+        content_layout.addLayout(header)
 
-        self.tabs = ttk.Notebook(shell, style="Modern.TNotebook")
-        self.tabs.pack(fill="both", expand=True)
-        self.settings_tab = ttk.Frame(self.tabs, style="App.TFrame", padding=12)
-        self.jobs_tab = ttk.Frame(self.tabs, style="App.TFrame", padding=12)
-        self.editor_tab = ttk.Frame(self.tabs, style="App.TFrame", padding=12)
-        self.tabs.add(self.settings_tab, text="연결")
-        self.tabs.add(self.jobs_tab, text="작업")
-        self.tabs.add(self.editor_tab, text="작업 설정")
+        self.pages = QStackedWidget()
+        content_layout.addWidget(self.pages, 1)
+        layout.addWidget(content, 1)
+        self.setCentralWidget(root)
 
         self._build_settings()
         self._build_jobs()
         self._build_editor()
+        self.sidebar.setCurrentRow(0)
 
-    def _apply_style(self) -> None:
-        style = ttk.Style(self)
-        try:
-            style.theme_use("clam")
-        except tk.TclError:
-            pass
-        style.configure(".", font=("Segoe UI", 10), foreground=TEXT)
-        style.configure("App.TFrame", background=BG)
-        style.configure("Card.TFrame", background=SURFACE, relief="solid", borderwidth=1)
-        style.configure("Toolbar.TFrame", background=SURFACE)
-        style.configure("AppTitle.TLabel", background=BG, foreground=TEXT, font=("Segoe UI Semibold", 16))
-        style.configure("Title.TLabel", background=SURFACE, foreground=TEXT, font=("Segoe UI Semibold", 12))
-        style.configure("Muted.TLabel", background=SURFACE, foreground=MUTED)
-        style.configure("FieldName.TLabel", background=SURFACE, foreground=MUTED, font=("Segoe UI Semibold", 9))
-        style.configure("FieldValue.TLabel", background=SURFACE, foreground=TEXT)
-        style.configure("Status.TLabel", background="#eef4ff", foreground="#1849a9", padding=(10, 4), font=("Segoe UI Semibold", 9))
-        style.configure("TButton", padding=(12, 7))
-        style.configure("Accent.TButton", foreground="#ffffff", background=ACCENT)
-        style.map("Accent.TButton", background=[("active", "#1d4ed8"), ("disabled", "#98a2b3")])
-        style.configure("Edit.TButton", foreground="#ffffff", background="#475467")
-        style.map("Edit.TButton", background=[("active", "#344054"), ("disabled", "#98a2b3")])
-        style.configure("Danger.TButton", foreground="#ffffff", background=DANGER)
-        style.map("Danger.TButton", background=[("active", "#912018"), ("disabled", "#98a2b3")])
-        style.configure("TEntry", padding=4)
-        style.configure("TCombobox", padding=4)
-        style.configure("Modern.TNotebook", background=BG, borderwidth=0)
-        style.configure("Modern.TNotebook.Tab", padding=(14, 8), font=("Segoe UI Semibold", 10))
-        style.map(
-            "Modern.TNotebook.Tab",
-            background=[("selected", SURFACE), ("!selected", "#e9edf3")],
-            foreground=[("selected", TEXT), ("!selected", MUTED)],
-            padding=[("selected", "14 8 14 8"), ("!selected", "14 8 14 8")],
-            expand=[("selected", "0 0 0 0"), ("!selected", "0 0 0 0")],
-        )
-        style.configure("Treeview", rowheight=28, fieldbackground=SURFACE, background=SURFACE, foreground=TEXT)
-        style.configure("Treeview.Heading", font=("Segoe UI Semibold", 10), padding=(6, 6))
-
-    def _build_jobs(self) -> None:
-        pane = ttk.PanedWindow(self.jobs_tab, orient="horizontal")
-        pane.pack(fill="both", expand=True)
-        self.jobs_pane = pane
-
-        left = self._card(pane, padding=12)
-        pane.add(left, weight=1)
-        right = self._card(pane, padding=12)
-        pane.add(right, weight=2)
-        self.after_idle(self.set_jobs_pane_ratio)
-
-        list_header = ttk.Frame(left, style="Toolbar.TFrame")
-        list_header.pack(fill="x", pady=(0, 10))
-        ttk.Label(list_header, text="작업 목록", style="Title.TLabel").pack(side="left")
-        self.new_job_button = ttk.Button(list_header, text="새 작업", style="Accent.TButton", command=self.new_job)
-        self.new_job_button.pack(side="right")
-
-        columns = ("name", "scope", "schedule", "target")
-        table_frame = ttk.Frame(left, style="Toolbar.TFrame")
-        table_frame.pack(fill="both", expand=True)
-        self.job_table = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="browse")
-        self.job_table.heading("name", text="이름")
-        self.job_table.heading("scope", text="범위")
-        self.job_table.heading("schedule", text="예약")
-        self.job_table.heading("target", text="대상 폴더")
-        self.job_table.column("name", width=150, minwidth=110)
-        self.job_table.column("scope", width=90, minwidth=70)
-        self.job_table.column("schedule", width=110, minwidth=85)
-        self.job_table.column("target", width=180, minwidth=120)
-        yscroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.job_table.yview)
-        xscroll = ttk.Scrollbar(table_frame, orient="horizontal", command=self.job_table.xview)
-        self.job_table.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
-        self.job_table.grid(row=0, column=0, sticky="nsew")
-        yscroll.grid(row=0, column=1, sticky="ns")
-        xscroll.grid(row=1, column=0, sticky="ew")
-        table_frame.columnconfigure(0, weight=1)
-        table_frame.rowconfigure(0, weight=1)
-        self.job_table.bind("<<TreeviewSelect>>", lambda _event: self.update_job_details())
-        self.job_table.bind("<Double-1>", lambda _event: self.edit_selected())
-
-        detail_header = ttk.Frame(right, style="Toolbar.TFrame")
-        detail_header.pack(fill="x", pady=(0, 10))
-        ttk.Label(detail_header, text="선택한 작업", style="Title.TLabel").pack(side="left")
-        self.sync_button = ttk.Button(detail_header, text="지금 동기화", style="Accent.TButton", command=self.run_selected)
-        self.sync_button.pack(side="right")
-
-        action_row = ttk.Frame(right, style="Toolbar.TFrame")
-        action_row.pack(fill="x", pady=(0, 8))
-        self.edit_button = ttk.Button(action_row, text="편집", style="Edit.TButton", command=self.edit_selected)
-        self.edit_button.pack(side="left")
-        self.open_target_button = ttk.Button(action_row, text="대상 폴더 열기", command=self.open_selected_target)
-        self.open_target_button.pack(side="left", padx=(6, 0))
-        self.delete_button = ttk.Button(action_row, text="삭제", style="Danger.TButton", command=self.delete_selected)
-        self.delete_button.pack(side="left", padx=(6, 0))
-
-        summary_frame = ttk.Frame(right, style="Toolbar.TFrame")
-        summary_frame.pack(fill="x", pady=(8, 16))
-        summary_frame.columnconfigure(1, weight=1)
-        self.job_summary_name = tk.StringVar(value="-")
-        self.job_summary_scope = tk.StringVar(value="-")
-        self.job_summary_schedule = tk.StringVar(value="-")
-        self.job_summary_next_run = tk.StringVar(value="-")
-        self.job_summary_last_event = tk.StringVar(value="-")
-        self.job_summary_target = tk.StringVar(value="-")
-        self.job_summary_url = tk.StringVar(value="-")
-        self._job_summary_row(summary_frame, 0, "작업명", self.job_summary_name)
-        self._job_summary_row(summary_frame, 1, "범위", self.job_summary_scope)
-        self._job_summary_row(summary_frame, 2, "예약", self.job_summary_schedule)
-        self._job_summary_row(summary_frame, 3, "다음 실행", self.job_summary_next_run)
-        self._job_summary_row(summary_frame, 4, "최근 이벤트", self.job_summary_last_event)
-        self._job_summary_row(summary_frame, 5, "저장 폴더", self.job_summary_target)
-        self._job_summary_row(summary_frame, 6, "URL", self.job_summary_url)
-        ttk.Separator(right, orient="horizontal").pack(fill="x", pady=(0, 14))
-        ttk.Label(right, text="최근 동기화", style="Title.TLabel").pack(anchor="w", pady=(0, 6))
-        history_frame = ttk.Frame(right, style="Toolbar.TFrame")
-        history_frame.pack(fill="x", pady=(0, 16))
-        history_columns = ("time", "status", "exported", "deleted", "skipped", "errors")
-        self.run_history_table = ttk.Treeview(history_frame, columns=history_columns, show="headings", height=7, selectmode="none")
-        self.run_history_table.heading("time", text="한국시간")
-        self.run_history_table.heading("status", text="결과")
-        self.run_history_table.heading("exported", text="생성/업데이트")
-        self.run_history_table.heading("deleted", text="삭제")
-        self.run_history_table.heading("skipped", text="건너뜀")
-        self.run_history_table.heading("errors", text="오류")
-        self.run_history_table.column("time", width=160, minwidth=145, anchor="w")
-        self.run_history_table.column("status", width=70, minwidth=60, anchor="center")
-        self.run_history_table.column("exported", width=105, minwidth=90, anchor="e")
-        self.run_history_table.column("deleted", width=70, minwidth=60, anchor="e")
-        self.run_history_table.column("skipped", width=70, minwidth=60, anchor="e")
-        self.run_history_table.column("errors", width=70, minwidth=60, anchor="e")
-        history_scroll = ttk.Scrollbar(history_frame, orient="vertical", command=self.run_history_table.yview)
-        self.run_history_table.configure(yscrollcommand=history_scroll.set)
-        self.run_history_table.grid(row=0, column=0, sticky="ew")
-        history_scroll.grid(row=0, column=1, sticky="ns")
-        history_frame.columnconfigure(0, weight=1)
-        self.set_run_history_rows([])
-
-    def _job_summary_row(self, parent: ttk.Frame, row: int, label: str, variable: tk.StringVar) -> None:
-        ttk.Label(parent, text=label, style="FieldName.TLabel", width=10).grid(row=row, column=0, sticky="nw", padx=(0, 12), pady=3)
-        ttk.Label(parent, textvariable=variable, style="FieldValue.TLabel", wraplength=620, justify="left").grid(
-            row=row, column=1, sticky="ew", pady=3
-        )
-
-    def set_jobs_pane_ratio(self) -> None:
-        if not hasattr(self, "jobs_pane"):
-            return
-        width = self.jobs_pane.winfo_width()
-        if width <= 1:
-            self.after(50, self.set_jobs_pane_ratio)
-            return
-        try:
-            self.jobs_pane.sashpos(0, max(320, width // 3))
-        except tk.TclError:
-            pass
-
-    def _build_editor(self) -> None:
-        self.job_name = tk.StringVar()
-        self.job_url = tk.StringVar()
-        self.job_target = tk.StringVar(value=str(default_workspace() / "jobs" / "product-docs"))
-        self.include_children = tk.BooleanVar(value=True)
-        self.option_cme_scope = tk.StringVar(value=str(DEFAULT_EXPORT_OPTIONS["cme_scope"]))
-        self.option_cme_cloud_id = tk.StringVar(value=str(DEFAULT_EXPORT_OPTIONS["cme_cloud_id"]))
-        self.option_page_href = tk.StringVar(value=str(DEFAULT_EXPORT_OPTIONS["page_href"]))
-        self.option_attachment_href = tk.StringVar(value=str(DEFAULT_EXPORT_OPTIONS["attachment_href"]))
-        self.option_attachment_export_all = tk.BooleanVar(value=bool(DEFAULT_EXPORT_OPTIONS["attachment_export_all"]))
-        self.option_page_breadcrumbs = tk.BooleanVar(value=bool(DEFAULT_EXPORT_OPTIONS["page_breadcrumbs"]))
-        self.option_page_properties_as_front_matter = tk.BooleanVar(value=bool(DEFAULT_EXPORT_OPTIONS["page_properties_as_front_matter"]))
-        self.option_include_document_title = tk.BooleanVar(value=bool(DEFAULT_EXPORT_OPTIONS["include_document_title"]))
-        self.option_enable_jira_enrichment = tk.BooleanVar(value=bool(DEFAULT_EXPORT_OPTIONS["enable_jira_enrichment"]))
-        self.option_skip_unchanged = tk.BooleanVar(value=bool(DEFAULT_EXPORT_OPTIONS["skip_unchanged"]))
-        self.option_cleanup_stale = tk.BooleanVar(value=bool(DEFAULT_EXPORT_OPTIONS["cleanup_stale"]))
-        self.option_verify_ssl = tk.BooleanVar(value=bool(DEFAULT_EXPORT_OPTIONS["verify_ssl"]))
-        self.option_timeout = tk.StringVar(value=str(DEFAULT_EXPORT_OPTIONS["timeout"]))
-        self.option_max_workers = tk.StringVar(value=str(DEFAULT_EXPORT_OPTIONS["max_workers"]))
-        self.schedule_enabled = tk.BooleanVar(value=bool(DEFAULT_SCHEDULE["enabled"]))
-        self.schedule_kind = tk.StringVar(value=SCHEDULE_KIND_LABELS[str(DEFAULT_SCHEDULE["kind"])])
-        self.schedule_hour = tk.StringVar(value="09")
-        self.schedule_minute = tk.StringVar(value="00")
-        self.schedule_day_vars = {day: tk.BooleanVar(value=day <= 5) for day, _label in DAY_LABELS}
-        self.schedule_day_of_month = tk.StringVar(value="1")
-        self.schedule_paused = tk.BooleanVar(value=bool(DEFAULT_SCHEDULE["paused"]))
-        self.cme_config_json = tk.StringVar(value=default_cme_config_json(self.job_target.get()))
-        self.editor_status = tk.StringVar(value="새 작업")
-
-        outer = self._card(self.editor_tab, padding=14)
-        outer.pack(fill="both", expand=True)
-
-        header = ttk.Frame(outer, style="Toolbar.TFrame")
-        header.pack(fill="x", pady=(0, 12))
-        ttk.Label(header, textvariable=self.editor_status, style="Title.TLabel").pack(side="left")
-        self.save_job_button = ttk.Button(header, text="작업 저장", style="Accent.TButton", command=self.save_job)
-        self.save_job_button.pack(side="right")
-        self.new_editor_job_button = ttk.Button(header, text="새 작업", command=self.new_job)
-        self.new_editor_job_button.pack(side="right", padx=(0, 6))
-
-        self.editor_pages = ttk.Notebook(outer, style="Modern.TNotebook")
-        self.editor_pages.pack(fill="both", expand=True)
-        basics = ttk.Frame(self.editor_pages, style="App.TFrame", padding=12)
-        options = ttk.Frame(self.editor_pages, style="App.TFrame", padding=12)
-        schedule = ttk.Frame(self.editor_pages, style="App.TFrame", padding=12)
-        self.editor_pages.add(basics, text="기본 정보")
-        self.editor_pages.add(options, text="CME 옵션")
-        self.editor_pages.add(schedule, text="예약")
-
-        self._section_title(basics, "가져올 문서와 저장 위치")
-        self._helper(basics, "Confluence 페이지, 페이지 트리, 스페이스, 조직 URL을 작업으로 저장합니다.")
-        self._form_row(basics, "작업 이름", self.job_name)
-        self._form_row(basics, "Confluence URL", self.job_url)
-        self._helper(basics, "여러 URL은 쉼표로 구분합니다. 하위 페이지까지 가져오려면 아래 옵션을 켜세요.")
-        target_row = ttk.Frame(basics, style="App.TFrame")
-        target_row.pack(fill="x", pady=5)
-        ttk.Label(target_row, text="저장 폴더", width=24, background=BG).pack(side="left")
-        ttk.Entry(target_row, textvariable=self.job_target).pack(side="left", fill="x", expand=True)
-        ttk.Button(target_row, text="찾아보기", command=self.choose_target).pack(side="left", padx=(6, 0))
-        self._helper(basics, "내려받은 Markdown 파일과 첨부파일이 저장될 로컬 폴더입니다.")
-        ttk.Checkbutton(basics, text="하위 페이지 포함", variable=self.include_children).pack(anchor="w", pady=(10, 0))
-
-        self._section_title(schedule, "예약 실행")
-        self._helper(schedule, "앱이 tray/background 상태로 실행 중일 때 예약된 시간에 같은 동기화 엔진을 실행합니다.")
-        ttk.Checkbutton(schedule, text="예약 사용", variable=self.schedule_enabled).pack(anchor="w", pady=4)
-        schedule_kind_row = ttk.Frame(schedule, style="App.TFrame")
-        schedule_kind_row.pack(fill="x", pady=5)
-        ttk.Label(schedule_kind_row, text="예약 주기", width=24, background=BG).pack(side="left")
-        self.schedule_kind_combo = ttk.Combobox(schedule_kind_row, textvariable=self.schedule_kind, values=tuple(SCHEDULE_KIND_VALUES), state="readonly", width=30)
-        self.schedule_kind_combo.pack(side="left")
-        self.schedule_kind.trace_add("write", lambda *_args: self.update_schedule_condition_visibility())
-
-        self.weekly_frame = ttk.Frame(schedule, style="App.TFrame")
-        ttk.Label(self.weekly_frame, text="요일", width=24, background=BG).pack(side="left")
-        for day, label in DAY_LABELS:
-            ttk.Checkbutton(self.weekly_frame, text=label, variable=self.schedule_day_vars[day]).pack(side="left", padx=(0, 8))
-
-        self.monthly_frame = ttk.Frame(schedule, style="App.TFrame")
-        ttk.Label(self.monthly_frame, text="매월 실행 일자", width=24, background=BG).pack(side="left")
-        ttk.Combobox(
-            self.monthly_frame,
-            textvariable=self.schedule_day_of_month,
-            values=tuple(str(day) for day in range(1, 32)),
-            state="readonly",
-            width=8,
-        ).pack(side="left")
-        ttk.Label(self.monthly_frame, text="없는 날짜는 그 달에 실행하지 않습니다.", background=BG, foreground=MUTED).pack(side="left", padx=(8, 0))
-
-        self._section_title(schedule, "실행 시각")
-        time_row = ttk.Frame(schedule, style="App.TFrame")
-        time_row.pack(fill="x", pady=5)
-        ttk.Label(time_row, text="시각 선택", width=24, background=BG).pack(side="left")
-        ttk.Combobox(time_row, textvariable=self.schedule_hour, values=HOUR_VALUES, state="readonly", width=5).pack(side="left")
-        ttk.Label(time_row, text=":", background=BG).pack(side="left")
-        ttk.Combobox(time_row, textvariable=self.schedule_minute, values=MINUTE_VALUES, state="readonly", width=5).pack(side="left")
-        ttk.Button(time_row, text="추가", command=self.add_schedule_time_from_picker).pack(side="left", padx=(8, 0))
-        times_row = ttk.Frame(schedule, style="App.TFrame")
-        times_row.pack(fill="x", pady=5)
-        ttk.Label(times_row, text="등록된 시각", width=24, background=BG).pack(side="left", anchor="n")
-        self.schedule_times_list = tk.Listbox(times_row, height=5, exportselection=False)
-        self.schedule_times_list.pack(side="left", fill="x", expand=True)
-        ttk.Button(times_row, text="삭제", command=self.remove_selected_schedule_time).pack(side="left", padx=(8, 0), anchor="n")
-        ttk.Label(schedule, text="시간대: Asia/Seoul", background=BG, foreground=MUTED).pack(anchor="w", pady=(4, 8))
-        ttk.Checkbutton(schedule, text="이 작업 예약 일시정지", variable=self.schedule_paused).pack(anchor="w", pady=4)
-        ttk.Label(
-            schedule,
-            text="Windows 로그인 자동 시작이 꺼져 있으면 앱을 완전히 종료한 동안의 예약 실행은 보장되지 않습니다.",
-            background=BG,
-            foreground=MUTED,
-            wraplength=840,
-        ).pack(anchor="w", pady=(10, 0))
-        self.update_schedule_condition_visibility()
-
-        self._section_title(options, "가져오기 범위")
-        self._helper(options, "대부분은 auto 그대로 두면 URL과 하위 페이지 포함 여부로 자동 결정됩니다.")
-        self._combobox_row(options, "CME 범위", self.option_cme_scope, CME_SCOPES)
-        self._section_title(options, "링크와 첨부파일")
-        self._combobox_row(options, "페이지 링크", self.option_page_href, HREF_OPTIONS)
-        self._combobox_row(options, "첨부파일 링크", self.option_attachment_href, HREF_OPTIONS)
-        for label, var in (
-            ("첨부파일 전체 저장", self.option_attachment_export_all),
-            ("페이지 경로 표시", self.option_page_breadcrumbs),
-            ("페이지 속성을 Front Matter로 저장", self.option_page_properties_as_front_matter),
-            ("문서 제목 포함", self.option_include_document_title),
-            ("Jira 정보 보강", self.option_enable_jira_enrichment),
-            ("변경 없는 파일 건너뛰기", self.option_skip_unchanged),
-            ("사라진 파일 정리", self.option_cleanup_stale),
-            ("SSL 검증", self.option_verify_ssl),
-        ):
-            ttk.Checkbutton(options, text=label, variable=var).pack(anchor="w", pady=2)
-        self._section_title(options, "연결 옵션")
-        self._entry_row(options, "타임아웃(초)", self.option_timeout)
-        self._entry_row(options, "동시 작업 수", self.option_max_workers)
+    def show_page(self, index: int) -> None:
+        if 0 <= index < self.pages.count():
+            self.pages.setCurrentIndex(index)
 
     def _build_settings(self) -> None:
-        scrollable = self._scrollable_frame(self.settings_tab)
-        card = self._card(scrollable, padding=14)
-        card.pack(fill="both", expand=True)
-        ttk.Label(card, text="연결 정보", style="Title.TLabel").pack(anchor="w", pady=(0, 8))
-        self._helper(card, "Confluence 접속 정보를 입력하고 연결 테스트를 통과해야 저장할 수 있습니다.")
+        page = self._page()
+        card = self._card()
+        layout = QVBoxLayout(card)
+        layout.setSpacing(12)
+        layout.addWidget(self._section_header("연결 정보", "Confluence 접속 정보를 입력하고 연결 테스트를 통과해야 저장할 수 있습니다."))
         settings = load_settings()
-        self.base_url = tk.StringVar(value=settings.get("base_url", ""))
-        self.email = tk.StringVar(value=settings.get("email", ""))
-        self.token = tk.StringVar()
-        self._entry_row(card, "Confluence 기본 URL", self.base_url)
-        self._entry_row(card, "이메일", self.email)
-        self._entry_row(card, "API 토큰", self.token, show="*")
-        ttk.Label(card, text="API 토큰은 Windows Credential Manager에만 저장됩니다.", style="Muted.TLabel").pack(anchor="w", pady=(6, 14))
+        self.base_url = QLineEdit(str(settings.get("base_url", "")))
+        self.email = QLineEdit(str(settings.get("email", "")))
+        self.token = QLineEdit()
+        self.token.setEchoMode(QLineEdit.Password)
+        self._prepare_line_edit(self.base_url, "https://your-domain.atlassian.net/wiki")
+        self._prepare_line_edit(self.email, "name@company.com")
+        self._prepare_line_edit(self.token, "Confluence API token")
+        form = QGridLayout()
+        form.setHorizontalSpacing(14)
+        form.setVerticalSpacing(10)
+        self._add_form_row(form, 0, "Confluence 기본 URL", self.base_url)
+        self._add_form_row(form, 1, "이메일", self.email)
+        self._add_form_row(form, 2, "API 토큰", self.token)
+        layout.addLayout(form)
+        layout.addWidget(self._helper("API 토큰은 Windows Credential Manager에만 저장됩니다."))
 
-        ttk.Label(card, text="1. 연결 테스트", style="Title.TLabel").pack(anchor="w", pady=(4, 6))
-        self._helper(card, "현재 입력한 정보로 Confluence에 연결되는지 확인합니다.")
-        test_row = ttk.Frame(card, style="Toolbar.TFrame")
-        test_row.pack(fill="x")
-        self.test_connection_button = ttk.Button(test_row, text="연결 테스트", style="Accent.TButton", command=self.test_connection)
-        self.test_connection_button.pack(side="left")
+        action_grid = QGridLayout()
+        action_grid.setHorizontalSpacing(12)
+        action_grid.setVerticalSpacing(12)
 
-        ttk.Label(card, text="2. 저장 및 작업 생성", style="Title.TLabel").pack(anchor="w", pady=(18, 6))
-        self._helper(card, "연결 테스트가 성공한 뒤에만 저장할 수 있습니다.")
-        proceed_row = ttk.Frame(card, style="Toolbar.TFrame")
-        proceed_row.pack(fill="x")
-        self.save_create_button = ttk.Button(
-            proceed_row,
-            text="저장 후 작업 만들기",
-            style="Accent.TButton",
-            command=lambda: self.save_settings(open_editor=True),
-            state="disabled",
-        )
-        self.save_create_button.pack(side="left")
+        actions = self._step_card("1. 연결 테스트", "현재 입력한 정보로 Confluence에 연결되는지 확인합니다.")
+        self.test_connection_button = self._button("연결 테스트", "primary")
+        self.test_connection_button.clicked.connect(self.test_connection)
+        actions.layout().addWidget(self.test_connection_button)
+        action_grid.addWidget(actions, 0, 0)
 
-        ttk.Separator(card, orient="horizontal").pack(fill="x", pady=(18, 12))
-        ttk.Label(card, text="계정 관리", style="Title.TLabel").pack(anchor="w", pady=(0, 6))
-        account_row = ttk.Frame(card, style="Toolbar.TFrame")
-        account_row.pack(fill="x")
-        self.logout_button = ttk.Button(account_row, text="저장된 토큰 삭제", command=self.logout)
-        self.logout_button.pack(side="left")
-        ttk.Separator(card, orient="horizontal").pack(fill="x", pady=(18, 12))
-        ttk.Label(card, text="Background 실행", style="Title.TLabel").pack(anchor="w", pady=(0, 6))
-        ttk.Checkbutton(card, text="스케줄 전역 일시정지", variable=self.global_schedule_paused, command=self.toggle_global_pause).pack(anchor="w", pady=4)
-        ttk.Checkbutton(card, text="Windows 로그인 시 자동 시작(opt-in)", variable=self.auto_start, command=self.save_auto_start_setting).pack(anchor="w", pady=4)
-        self._helper(card, "자동 시작이 꺼져 있으면 앱을 완전히 종료한 동안 예약 실행은 보장되지 않습니다.")
-        for variable in (self.base_url, self.email, self.token):
-            variable.trace_add("write", self.connection_inputs_changed)
+        proceed = self._step_card("2. 저장 및 작업 생성", "성공한 연결 정보만 저장할 수 있습니다.")
+        self.save_create_button = self._button("저장 후 작업 만들기", "primary")
+        self.save_create_button.setEnabled(False)
+        self.save_create_button.clicked.connect(lambda: self.save_settings(open_editor=True))
+        proceed.layout().addWidget(self.save_create_button)
+        action_grid.addWidget(proceed, 0, 1)
+
+        account = self._step_card("계정 관리", "현재 저장된 API 토큰을 이 PC에서 삭제합니다.")
+        self.logout_button = self._button("저장된 토큰 삭제", "secondary")
+        self.logout_button.clicked.connect(self.logout)
+        account.layout().addWidget(self.logout_button)
+        action_grid.addWidget(account, 1, 0)
+
+        background = self._step_card("Background 실행", "앱이 tray/background 상태일 때 예약된 작업을 실행합니다.")
+        self.global_pause_check = QCheckBox("스케줄 전역 일시정지")
+        self.global_pause_check.setChecked(self.global_schedule_paused)
+        self.global_pause_check.stateChanged.connect(lambda _state: self.toggle_global_pause())
+        self.auto_start_check = QCheckBox("Windows 로그인 시 자동 시작(opt-in)")
+        self.auto_start_check.setChecked(self.auto_start)
+        self.auto_start_check.stateChanged.connect(lambda _state: self.save_auto_start_setting())
+        background.layout().addWidget(self.global_pause_check)
+        background.layout().addWidget(self.auto_start_check)
+        background.layout().addWidget(self._helper("자동 시작이 꺼져 있으면 앱을 완전히 종료한 동안 예약 실행은 보장되지 않습니다."))
+        action_grid.addWidget(background, 1, 1)
+        action_grid.setColumnStretch(0, 1)
+        action_grid.setColumnStretch(1, 1)
+        layout.addLayout(action_grid)
+
+        layout.addStretch(1)
+        page.layout().addWidget(card)
+        self.pages.addWidget(page)
+        for field in (self.base_url, self.email, self.token):
+            field.textChanged.connect(self.connection_inputs_changed)
         self.update_connection_actions()
 
-    def _card(self, parent: tk.Misc, padding: int = 10) -> ttk.Frame:
-        frame = ttk.Frame(parent, style="Card.TFrame", padding=padding)
+    def _build_jobs(self) -> None:
+        page = self._page()
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setChildrenCollapsible(False)
+
+        left = self._card()
+        left.setMinimumWidth(320)
+        left_layout = QVBoxLayout(left)
+        header = QHBoxLayout()
+        header.addWidget(self._title("작업 목록"), 1)
+        self.new_job_button = self._button("새 작업", "primary")
+        self.new_job_button.clicked.connect(self.new_job)
+        header.addWidget(self.new_job_button)
+        left_layout.addLayout(header)
+        self.job_list_stack = QStackedWidget()
+        self.empty_jobs_view = self._empty_jobs_view()
+        self.job_list = QListWidget()
+        self.job_list.setObjectName("JobList")
+        self.job_list.setSelectionMode(QListWidget.SingleSelection)
+        self.job_list.itemSelectionChanged.connect(self.update_job_details)
+        self.job_list.itemDoubleClicked.connect(lambda _item: self.edit_selected())
+        self.job_list_stack.addWidget(self.empty_jobs_view)
+        self.job_list_stack.addWidget(self.job_list)
+        left_layout.addWidget(self.job_list_stack, 1)
+        splitter.addWidget(left)
+
+        right = self._card()
+        right_layout = QVBoxLayout(right)
+        detail_header = QHBoxLayout()
+        detail_header.addWidget(self._title("선택한 작업"), 1)
+        self.sync_button = self._button("지금 동기화", "primary")
+        self.sync_button.clicked.connect(self.run_selected)
+        detail_header.addWidget(self.sync_button)
+        right_layout.addLayout(detail_header)
+
+        action_row = QHBoxLayout()
+        self.edit_button = self._button("편집", "secondary")
+        self.edit_button.clicked.connect(self.edit_selected)
+        self.open_target_button = self._button("대상 폴더 열기", "secondary")
+        self.open_target_button.clicked.connect(self.open_selected_target)
+        self.delete_button = self._button("삭제", "danger")
+        self.delete_button.clicked.connect(self.delete_selected)
+        action_row.addWidget(self.edit_button)
+        action_row.addWidget(self.open_target_button)
+        action_row.addStretch(1)
+        action_row.addWidget(self.delete_button)
+        right_layout.addLayout(action_row)
+
+        self.summary_grid = QGridLayout()
+        self.summary_grid.setHorizontalSpacing(18)
+        self.summary_grid.setVerticalSpacing(8)
+        self.job_summary_labels: dict[str, QLabel] = {}
+        for row, key, label in (
+            (0, "name", "작업명"),
+            (1, "scope", "범위"),
+            (2, "schedule", "예약"),
+            (3, "next_run", "다음 실행"),
+            (4, "last_event", "최근 이벤트"),
+            (5, "target", "저장 폴더"),
+            (6, "url", "URL"),
+        ):
+            self._job_summary_row(row, key, label)
+        right_layout.addLayout(self.summary_grid)
+
+        divider = QFrame()
+        divider.setFrameShape(QFrame.HLine)
+        right_layout.addWidget(divider)
+        right_layout.addWidget(self._title("최근 동기화"))
+        self.run_history_table = QTableWidget(0, 6)
+        self.run_history_table.setHorizontalHeaderLabels(["한국시간", "결과", "문서", "삭제", "건너뜀", "오류"])
+        self.run_history_table.verticalHeader().setVisible(False)
+        self.run_history_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.run_history_table.setSelectionMode(QTableWidget.NoSelection)
+        self.run_history_table.setAlternatingRowColors(True)
+        self.run_history_table.setShowGrid(False)
+        self.run_history_table.setWordWrap(False)
+        self.run_history_table.setCornerButtonEnabled(False)
+        self.run_history_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        for col in range(1, 6):
+            self.run_history_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
+        right_layout.addWidget(self.run_history_table, 1)
+        splitter.addWidget(right)
+        splitter.setSizes([360, 860])
+        page.layout().addWidget(splitter)
+        self.pages.addWidget(page)
+
+    def _build_editor(self) -> None:
+        self.job_name = QLineEdit()
+        self.job_url = QLineEdit()
+        self.job_target = QLineEdit(str(default_workspace() / "jobs" / "product-docs"))
+        self.job_target.setObjectName("PathField")
+        self._prepare_line_edit(self.job_name, "Product docs")
+        self._prepare_line_edit(self.job_url, "https://your-domain.atlassian.net/wiki/spaces/SPACE")
+        self._prepare_line_edit(self.job_target, str(default_workspace() / "jobs" / "product-docs"))
+        self.include_children = QCheckBox("하위 페이지 포함")
+        self.include_children.setChecked(True)
+        self.option_cme_scope = QComboBox()
+        self.option_cme_scope.addItems(CME_SCOPES)
+        self.option_page_href = QComboBox()
+        self.option_page_href.addItems(HREF_OPTIONS)
+        self.option_attachment_href = QComboBox()
+        self.option_attachment_href.addItems(HREF_OPTIONS)
+        self.option_attachment_export_all = QCheckBox("첨부파일 전체 저장")
+        self.option_page_breadcrumbs = QCheckBox("페이지 경로 표시")
+        self.option_page_properties_as_front_matter = QCheckBox("페이지 속성을 Front Matter로 저장")
+        self.option_include_document_title = QCheckBox("문서 제목 포함")
+        self.option_enable_jira_enrichment = QCheckBox("Jira 정보 보강")
+        self.option_skip_unchanged = QCheckBox("변경 없는 파일 건너뛰기")
+        self.option_cleanup_stale = QCheckBox("사라진 파일 정리")
+        self.option_verify_ssl = QCheckBox("SSL 검증")
+        self.option_timeout = QSpinBox()
+        self.option_timeout.setRange(1, 3600)
+        self.option_max_workers = QSpinBox()
+        self.option_max_workers.setRange(1, 128)
+        self.schedule_enabled = QCheckBox("예약 사용")
+        self.schedule_kind = QComboBox()
+        self.schedule_kind.addItems(tuple(SCHEDULE_KIND_VALUES))
+        self.schedule_hour = QComboBox()
+        self.schedule_hour.addItems(HOUR_VALUES)
+        self.schedule_minute = QComboBox()
+        self.schedule_minute.addItems(MINUTE_VALUES)
+        self.schedule_day_checks = {day: QCheckBox(label) for day, label in DAY_LABELS}
+        self.schedule_day_of_month = QComboBox()
+        self.schedule_day_of_month.addItems(tuple(str(day) for day in range(1, 32)))
+        self.schedule_paused = QCheckBox("이 작업 예약 일시정지")
+        self.schedule_times_list = QListWidget()
+        self.cme_config_text = QTextEdit("{}")
+        self.cme_config_text.setFontFamily(MONO)
+        self.cme_config_text.setAcceptRichText(False)
+        self.cme_config_text.setLineWrapMode(QTextEdit.NoWrap)
+        self.cme_config_text.textChanged.connect(self.update_cme_config_preview)
+        self.cme_config_preview = QTextEdit()
+        self.cme_config_preview.setFontFamily(MONO)
+        self.cme_config_preview.setAcceptRichText(False)
+        self.cme_config_preview.setReadOnly(True)
+        self.cme_config_preview.setLineWrapMode(QTextEdit.NoWrap)
+
+        page = self._page()
+        card = self._card()
+        layout = QVBoxLayout(card)
+        header = QHBoxLayout()
+        self.editor_status = QLabel("새 작업")
+        self.editor_status.setObjectName("PageTitle")
+        header.addWidget(self.editor_status, 1)
+        self.new_editor_job_button = self._button("새 작업", "secondary")
+        self.new_editor_job_button.clicked.connect(self.new_job)
+        self.save_job_button = self._button("작업 저장", "primary")
+        self.save_job_button.clicked.connect(self.save_job)
+        header.addWidget(self.new_editor_job_button)
+        header.addWidget(self.save_job_button)
+        layout.addLayout(header)
+
+        self.editor_pages = QTabWidget()
+        self.editor_pages.addTab(self._build_editor_basic_tab(), "기본 정보")
+        self.editor_pages.addTab(self._build_editor_options_tab(), "CME 옵션")
+        self.editor_pages.addTab(self._build_editor_schedule_tab(), "예약")
+        self.editor_pages.addTab(self._build_editor_json_tab(), "고급 JSON")
+        layout.addWidget(self.editor_pages, 1)
+        page.layout().addWidget(card)
+        self.pages.addWidget(page)
+        self._connect_editor_preview_signals()
+        self.set_export_options(dict(DEFAULT_EXPORT_OPTIONS))
+        self.set_schedule_options(dict(DEFAULT_SCHEDULE))
+
+    def _build_editor_basic_tab(self) -> QWidget:
+        tab = QWidget()
+        tab.setObjectName("TabSurface")
+        layout = QVBoxLayout(tab)
+        layout.addWidget(self._section_header("가져올 문서와 저장 위치", "Confluence 페이지, 페이지 트리, 스페이스, 조직 URL을 작업으로 저장합니다."))
+        form = QGridLayout()
+        form.setHorizontalSpacing(14)
+        form.setVerticalSpacing(10)
+        self._add_form_row(form, 0, "작업 이름", self.job_name)
+        self._add_form_row(form, 1, "Confluence URL", self.job_url)
+        target_row = QHBoxLayout()
+        target_row.addWidget(self.job_target, 1)
+        choose_button = self._button("찾아보기", "secondary")
+        choose_button.clicked.connect(self.choose_target)
+        target_row.addWidget(choose_button)
+        self._add_form_row(form, 2, "저장 폴더", target_row)
+        layout.addLayout(form)
+        layout.addWidget(self._helper("여러 URL은 쉼표로 구분합니다. 내려받은 Markdown 파일과 첨부파일이 저장될 로컬 폴더를 지정하세요."))
+        layout.addWidget(self.include_children)
+        layout.addStretch(1)
+        return tab
+
+    def _build_editor_options_tab(self) -> QWidget:
+        tab = QWidget()
+        tab.setObjectName("TabSurface")
+        layout = QVBoxLayout(tab)
+        layout.addWidget(self._section_header("가져오기 범위", "대부분은 auto 그대로 두면 URL과 하위 페이지 포함 여부로 자동 결정됩니다."))
+        form = QGridLayout()
+        self._add_form_row(form, 0, "CME 범위", self.option_cme_scope)
+        layout.addLayout(form)
+        layout.addWidget(self._section_header("링크와 첨부파일", "내려받은 문서 안의 링크와 첨부파일 처리 방식을 선택합니다."))
+        href_form = QGridLayout()
+        self._add_form_row(href_form, 0, "페이지 링크", self.option_page_href)
+        self._add_form_row(href_form, 1, "첨부파일 링크", self.option_attachment_href)
+        layout.addLayout(href_form)
+        checks = QGridLayout()
+        for index, check in enumerate(
+            (
+                self.option_attachment_export_all,
+                self.option_page_breadcrumbs,
+                self.option_page_properties_as_front_matter,
+                self.option_include_document_title,
+                self.option_enable_jira_enrichment,
+                self.option_skip_unchanged,
+                self.option_cleanup_stale,
+                self.option_verify_ssl,
+            )
+        ):
+            checks.addWidget(check, index // 2, index % 2)
+        layout.addLayout(checks)
+        layout.addWidget(self._section_header("연결 옵션", "큰 문서 트리에서는 타임아웃과 동시 작업 수를 조정할 수 있습니다."))
+        connection = QGridLayout()
+        self._add_form_row(connection, 0, "타임아웃(초)", self.option_timeout)
+        self._add_form_row(connection, 1, "동시 작업 수", self.option_max_workers)
+        layout.addLayout(connection)
+        layout.addStretch(1)
+        return tab
+
+    def _build_editor_json_tab(self) -> QWidget:
+        tab = QWidget()
+        tab.setObjectName("TabSurface")
+        layout = QVBoxLayout(tab)
+        layout.addWidget(self._section_header("CME Override JSON", "기본 설정으로 부족할 때 추가할 CME 설정만 입력합니다. 비워 두거나 {}를 사용해도 됩니다."))
+        layout.addWidget(self.cme_config_text, 1)
+        layout.addWidget(self._section_header("최종 설정 미리보기", "위 옵션과 Override JSON이 합쳐진 실행 설정입니다. 이 영역은 읽기 전용입니다."))
+        layout.addWidget(self.cme_config_preview, 1)
+        layout.addWidget(self._helper("인증 정보는 저장하지 마세요. 실행 직전에 Windows Credential Manager 값이 우선 적용됩니다."))
+        return tab
+
+    def _build_editor_schedule_tab(self) -> QWidget:
+        tab = QWidget()
+        tab.setObjectName("TabSurface")
+        layout = QVBoxLayout(tab)
+        layout.addWidget(self._section_header("예약 실행", "앱이 tray/background 상태로 실행 중일 때 예약된 시간에 같은 동기화 엔진을 실행합니다."))
+        layout.addWidget(self.schedule_enabled)
+        self.schedule_enabled.stateChanged.connect(lambda _state: self.update_schedule_condition_visibility())
+        form = QGridLayout()
+        self._add_form_row(form, 0, "예약 주기", self.schedule_kind)
+        self.weekly_widget = QWidget()
+        weekly_layout = QHBoxLayout(self.weekly_widget)
+        weekly_layout.setContentsMargins(0, 0, 0, 0)
+        for check in self.schedule_day_checks.values():
+            weekly_layout.addWidget(check)
+            check.stateChanged.connect(lambda _state: self.update_editor_next_run())
+        weekly_layout.addStretch(1)
+        self._add_form_row(form, 1, "요일", self.weekly_widget)
+        self._add_form_row(form, 2, "매월 실행 일자", self.schedule_day_of_month)
+        layout.addLayout(form)
+        layout.addWidget(self._helper("없는 날짜는 그 달에 실행하지 않습니다."))
+        self.schedule_kind.currentTextChanged.connect(lambda _text: self.update_schedule_condition_visibility())
+        layout.addWidget(self._section_header("실행 시각", "하나 이상의 실행 시각을 등록하세요."))
+        time_row = QHBoxLayout()
+        time_row.addWidget(self.schedule_hour)
+        time_row.addWidget(QLabel(":"))
+        time_row.addWidget(self.schedule_minute)
+        self.schedule_hour.currentTextChanged.connect(lambda _text: self.update_editor_next_run())
+        self.schedule_minute.currentTextChanged.connect(lambda _text: self.update_editor_next_run())
+        self.add_schedule_time_button = self._button("추가", "secondary")
+        self.add_schedule_time_button.clicked.connect(self.add_schedule_time_from_picker)
+        time_row.addWidget(self.add_schedule_time_button)
+        time_row.addStretch(1)
+        layout.addLayout(time_row)
+        layout.addWidget(self._title("등록된 시각"))
+        times = QHBoxLayout()
+        self.schedule_times_list.setFixedHeight(110)
+        times.addWidget(self.schedule_times_list, 1)
+        self.remove_schedule_time_button = self._button("삭제", "secondary")
+        self.remove_schedule_time_button.clicked.connect(self.remove_selected_schedule_time)
+        times.addWidget(self.remove_schedule_time_button)
+        layout.addLayout(times)
+        layout.addWidget(self._helper("시간대: Asia/Seoul"))
+        layout.addWidget(self.schedule_paused)
+        self.schedule_day_of_month.currentTextChanged.connect(lambda _text: self.update_editor_next_run())
+        self.schedule_paused.stateChanged.connect(lambda _state: self.update_editor_next_run())
+        self.schedule_next_run_label = self._helper("다음 실행: -")
+        layout.addWidget(self.schedule_next_run_label)
+        layout.addWidget(self._helper("Windows 로그인 자동 시작이 꺼져 있으면 앱을 완전히 종료한 동안의 예약 실행은 보장되지 않습니다."))
+        layout.addStretch(1)
+        self.update_schedule_condition_visibility()
+        return tab
+
+    def _connect_editor_preview_signals(self) -> None:
+        for combo in (self.option_cme_scope, self.option_page_href, self.option_attachment_href):
+            combo.currentTextChanged.connect(lambda _text: self.update_cme_config_preview())
+        for check in (
+            self.option_attachment_export_all,
+            self.option_page_breadcrumbs,
+            self.option_page_properties_as_front_matter,
+            self.option_include_document_title,
+            self.option_enable_jira_enrichment,
+            self.option_skip_unchanged,
+            self.option_cleanup_stale,
+            self.option_verify_ssl,
+        ):
+            check.stateChanged.connect(lambda _state: self.update_cme_config_preview())
+        for spin in (self.option_timeout, self.option_max_workers):
+            spin.valueChanged.connect(lambda _value: self.update_cme_config_preview())
+        self.job_target.textChanged.connect(lambda _text: self.update_cme_config_preview())
+
+    def _page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+        return page
+
+    def _card(self) -> QFrame:
+        frame = QFrame()
+        frame.setObjectName("Card")
+        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         return frame
 
-    def _scrollable_frame(self, parent: tk.Misc) -> ttk.Frame:
-        container = ttk.Frame(parent, style="App.TFrame")
-        container.pack(fill="both", expand=True)
-        canvas = tk.Canvas(container, background=BG, borderwidth=0, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
-        content = ttk.Frame(canvas, style="App.TFrame")
-        window_id = canvas.create_window((0, 0), window=content, anchor="nw")
+    def _prepare_line_edit(self, field: QLineEdit, placeholder: str) -> None:
+        field.setPlaceholderText(placeholder)
+        field.setClearButtonEnabled(True)
 
-        def update_scroll_region(_event: tk.Event | None = None) -> None:
-            canvas.configure(scrollregion=canvas.bbox("all"))
+    def _title(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName("SectionTitle")
+        return label
 
-        def update_content_width(event: tk.Event) -> None:
-            canvas.itemconfigure(window_id, width=event.width)
+    def _helper(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setObjectName("MutedLabel")
+        label.setWordWrap(True)
+        return label
 
-        def on_mousewheel(event: tk.Event) -> None:
-            delta = getattr(event, "delta", 0)
-            if delta:
-                canvas.yview_scroll(int(-delta / 120), "units")
+    def _section_header(self, title: str, helper: str) -> QWidget:
+        box = QWidget()
+        layout = QVBoxLayout(box)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        layout.addWidget(self._title(title))
+        layout.addWidget(self._helper(helper))
+        return box
 
-        def bind_wheel(_event: tk.Event) -> None:
-            canvas.bind_all("<MouseWheel>", on_mousewheel)
+    def _step_card(self, title: str, helper: str) -> QFrame:
+        frame = QFrame()
+        frame.setObjectName("InsetCard")
+        frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout = QVBoxLayout(frame)
+        layout.setSpacing(8)
+        layout.addWidget(self._section_header(title, helper))
+        return frame
 
-        def unbind_wheel(_event: tk.Event) -> None:
-            canvas.unbind_all("<MouseWheel>")
+    def _empty_jobs_view(self) -> QWidget:
+        view = QWidget()
+        layout = QVBoxLayout(view)
+        layout.setAlignment(Qt.AlignCenter)
+        title = QLabel("저장된 작업이 없습니다")
+        title.setObjectName("SectionTitle")
+        title.setAlignment(Qt.AlignCenter)
+        helper = self._helper("Confluence URL과 저장 폴더를 지정해 첫 작업을 만들어 보세요.")
+        helper.setAlignment(Qt.AlignCenter)
+        action = self._button("새 작업 만들기", "primary")
+        action.clicked.connect(self.new_job)
+        layout.addStretch(1)
+        layout.addWidget(title)
+        layout.addWidget(helper)
+        layout.addWidget(action, 0, Qt.AlignCenter)
+        layout.addStretch(1)
+        return view
 
-        content.bind("<Configure>", update_scroll_region)
-        canvas.bind("<Configure>", update_content_width)
-        canvas.bind("<Enter>", bind_wheel)
-        canvas.bind("<Leave>", unbind_wheel)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.grid(row=0, column=0, sticky="nsew")
-        scrollbar.grid(row=0, column=1, sticky="ns")
-        container.columnconfigure(0, weight=1)
-        container.rowconfigure(0, weight=1)
-        return content
+    def _job_list_item_widget(self, job: Job) -> QWidget:
+        widget = QFrame()
+        widget.setObjectName("JobCard")
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(5)
+        title = QLabel(job.name or "이름 없는 작업")
+        title.setObjectName("JobCardTitle")
+        title.setWordWrap(True)
+        status = QLabel(self._job_card_status(job))
+        status.setObjectName("MutedLabel")
+        status.setWordWrap(False)
+        target = QLabel(self._compact_path(job.target_dir))
+        target.setObjectName("MutedLabel")
+        target.setWordWrap(False)
+        layout.addWidget(title)
+        layout.addWidget(status)
+        layout.addWidget(target)
+        return widget
 
-    def _text_box(self, parent: tk.Misc, height: int) -> tk.Text:
-        text = tk.Text(
-            parent,
-            height=height,
-            wrap="word",
-            relief="solid",
-            borderwidth=1,
-            background=SURFACE,
-            foreground=TEXT,
-            insertbackground=TEXT,
-            font=MONO,
-            padx=8,
-            pady=8,
-        )
-        return text
+    def _job_card_status(self, job: Job) -> str:
+        latest = self._latest_run_status(job)
+        if latest:
+            return f"{self.format_schedule_status(job)} · 최근 {latest}"
+        return f"{self.format_schedule_status(job)} · 아직 실행 기록 없음"
 
-    def _section_title(self, parent: tk.Misc, text: str) -> None:
-        ttk.Label(parent, text=text, background=BG, foreground=TEXT, font=("Segoe UI Semibold", 11)).pack(anchor="w", pady=(8, 6))
+    def _latest_run_status(self, job: Job) -> str:
+        try:
+            history = load_run_history(job)
+        except Exception:
+            return "기록 읽기 실패"
+        runs = history.get("runs") if isinstance(history, dict) else []
+        if not isinstance(runs, list) or not runs:
+            return ""
+        latest = next((run for run in reversed(runs) if isinstance(run, dict)), None)
+        if latest is None:
+            return ""
+        status = str(latest.get("status") or "")
+        return {"success": "성공", "failed": "실패"}.get(status, status or "상태 없음")
 
-    def _helper(self, parent: tk.Misc, text: str) -> None:
-        ttk.Label(parent, text=text, background=BG, foreground=MUTED, wraplength=840).pack(anchor="w", pady=(0, 8))
+    def _compact_path(self, value: str, max_length: int = 36) -> str:
+        text = str(value or "").strip()
+        if len(text) <= max_length:
+            return text or "-"
+        return f"...{text[-(max_length - 3):]}"
 
-    def _form_row(self, parent: tk.Misc, label: str, variable: tk.StringVar) -> None:
-        self._entry_row(parent, label, variable)
+    def _button(self, text: str, role: str) -> QPushButton:
+        button = QPushButton(text)
+        button.setProperty("role", role)
+        button.setCursor(Qt.PointingHandCursor)
+        button.setIcon(self._button_icon(text, role))
+        button.setIconSize(QSize(16, 16))
+        return button
 
-    def _combobox_row(self, parent: tk.Misc, label: str, variable: tk.StringVar, values: tuple[str, ...]) -> None:
-        row = ttk.Frame(parent, style="App.TFrame")
-        row.pack(fill="x", pady=5)
-        ttk.Label(row, text=label, width=24, background=BG).pack(side="left")
-        ttk.Combobox(row, textvariable=variable, values=values, state="readonly", width=30).pack(side="left")
+    def _button_icon(self, text: str, role: str) -> QIcon:
+        icon = QStyle.StandardPixmap.SP_DialogApplyButton
+        if role == "danger" or "삭제" in text:
+            icon = QStyle.StandardPixmap.SP_TrashIcon
+        elif "저장" in text:
+            icon = QStyle.StandardPixmap.SP_DialogSaveButton
+        elif "열기" in text or "찾아보기" in text:
+            icon = QStyle.StandardPixmap.SP_DirOpenIcon
+        elif "동기화" in text or "테스트" in text:
+            icon = QStyle.StandardPixmap.SP_BrowserReload
+        elif "새" in text or "만들기" in text or "추가" in text:
+            icon = QStyle.StandardPixmap.SP_FileIcon
+        elif "편집" in text:
+            icon = QStyle.StandardPixmap.SP_FileDialogDetailedView
+        return self.style().standardIcon(icon)
 
-    def _entry_row(self, parent: tk.Misc, label: str, variable: tk.StringVar, show: str | None = None) -> None:
-        row = ttk.Frame(parent, style="App.TFrame")
-        row.pack(fill="x", pady=5)
-        ttk.Label(row, text=label, width=24, background=BG).pack(side="left")
-        ttk.Entry(row, textvariable=variable, show=show).pack(side="left", fill="x", expand=True)
+    def _add_form_row(self, form: QGridLayout, row: int, label: str, field: QWidget | QHBoxLayout) -> None:
+        label_widget = QLabel(label)
+        label_widget.setObjectName("FieldLabel")
+        form.addWidget(label_widget, row, 0, Qt.AlignTop)
+        if isinstance(field, QHBoxLayout):
+            form.addLayout(field, row, 1)
+        else:
+            form.addWidget(field, row, 1)
+        form.setColumnStretch(1, 1)
+
+    def _job_summary_row(self, row: int, key: str, label: str) -> None:
+        name = QLabel(label)
+        name.setObjectName("FieldLabel")
+        value = QLabel("-")
+        value.setObjectName("FieldValue")
+        value.setWordWrap(True)
+        self.summary_grid.addWidget(name, row, 0, Qt.AlignTop)
+        self.summary_grid.addWidget(value, row, 1)
+        self.summary_grid.setColumnStretch(1, 1)
+        self.job_summary_labels[key] = value
 
     def choose_target(self) -> None:
         if not self.ensure_not_busy():
             return
-        selected = filedialog.askdirectory()
+        selected = QFileDialog.getExistingDirectory(self, "저장 폴더 선택")
         if selected:
-            self.job_target.set(selected)
+            self.job_target.setText(selected)
 
     def new_job(self) -> None:
         if not self.ensure_not_busy():
             return
         self.editing_job_id = None
-        self.editor_status.set("새 작업")
-        self.job_name.set("")
-        self.job_url.set("")
-        self.job_target.set(str(default_workspace() / "jobs" / "product-docs"))
-        self.include_children.set(True)
+        self.editor_status.setText("새 작업")
+        self.job_name.setText("")
+        self.job_url.setText("")
+        self.job_target.setText(str(default_workspace() / "jobs" / "product-docs"))
+        self.include_children.setChecked(True)
         defaults = dict(DEFAULT_EXPORT_OPTIONS)
-        defaults["cme_config_json"] = default_cme_config_json(self.job_target.get())
+        defaults["cme_config_json"] = "{}"
         self.set_export_options(defaults)
         self.set_schedule_options(dict(DEFAULT_SCHEDULE))
-        self.editor_pages.select(0)
-        self.tabs.select(self.editor_tab)
-        self.status_text.set("새 작업 작성 중")
+        self.editor_pages.setCurrentIndex(0)
+        self.sidebar.setCurrentRow(2)
+        self.set_status_text("새 작업 작성 중")
 
     def edit_selected(self) -> None:
         if not self.ensure_not_busy():
@@ -700,160 +937,214 @@ class ConfluenceSyncApp(tk.Tk):
         try:
             job = self.selected_job()
             self.editing_job_id = job.id
-            self.editor_status.set(f"Editing {job.id}")
-            self.job_name.set(job.name)
-            self.job_url.set(job.export_options.get("cme_urls") or job.confluence_url)
-            self.job_target.set(job.target_dir)
-            self.include_children.set(job.include_children)
+            self.editor_status.setText(f"편집 중: {job.id}")
+            self.job_name.setText(job.name)
+            self.job_url.setText(str(job.export_options.get("cme_urls") or job.confluence_url))
+            self.job_target.setText(job.target_dir)
+            self.include_children.setChecked(job.include_children)
             self.set_export_options(job.export_options)
             self.set_schedule_options(job.schedule)
-            self.editor_pages.select(0)
-            self.tabs.select(self.editor_tab)
-            self.status_text.set(f"작업 편집 중: {job.name}")
+            self.editor_pages.setCurrentIndex(0)
+            self.sidebar.setCurrentRow(2)
+            self.set_status_text(f"작업 편집 중: {job.name}")
         except Exception as exc:
             self.show_error(exc)
 
     def set_export_options(self, options: dict[str, object]) -> None:
         merged = dict(DEFAULT_EXPORT_OPTIONS)
         merged.update(options or {})
-        self.option_cme_scope.set(self._choice(str(merged["cme_scope"]), CME_SCOPES, "auto"))
-        self.option_cme_cloud_id.set(str(merged["cme_cloud_id"]))
-        self.option_page_href.set(self._choice(str(merged["page_href"]), HREF_OPTIONS, "relative"))
-        self.option_attachment_href.set(self._choice(str(merged["attachment_href"]), HREF_OPTIONS, "relative"))
-        self.option_attachment_export_all.set(bool(merged["attachment_export_all"]))
-        self.option_page_breadcrumbs.set(bool(merged["page_breadcrumbs"]))
-        self.option_page_properties_as_front_matter.set(bool(merged["page_properties_as_front_matter"]))
-        self.option_include_document_title.set(bool(merged["include_document_title"]))
-        self.option_enable_jira_enrichment.set(bool(merged["enable_jira_enrichment"]))
-        self.option_skip_unchanged.set(bool(merged["skip_unchanged"]))
-        self.option_cleanup_stale.set(bool(merged["cleanup_stale"]))
-        self.option_verify_ssl.set(bool(merged["verify_ssl"]))
-        self.option_timeout.set(str(merged["timeout"]))
-        self.option_max_workers.set(str(merged["max_workers"]))
-        self.set_cme_config_json(str(merged.get("cme_config_json") or default_cme_config_json(self.job_target.get())))
+        self._set_combo(self.option_cme_scope, str(merged["cme_scope"]), "auto")
+        self._set_combo(self.option_page_href, str(merged["page_href"]), "relative")
+        self._set_combo(self.option_attachment_href, str(merged["attachment_href"]), "relative")
+        self.option_attachment_export_all.setChecked(bool(merged["attachment_export_all"]))
+        self.option_page_breadcrumbs.setChecked(bool(merged["page_breadcrumbs"]))
+        self.option_page_properties_as_front_matter.setChecked(bool(merged["page_properties_as_front_matter"]))
+        self.option_include_document_title.setChecked(bool(merged["include_document_title"]))
+        self.option_enable_jira_enrichment.setChecked(bool(merged["enable_jira_enrichment"]))
+        self.option_skip_unchanged.setChecked(bool(merged["skip_unchanged"]))
+        self.option_cleanup_stale.setChecked(bool(merged["cleanup_stale"]))
+        self.option_verify_ssl.setChecked(bool(merged["verify_ssl"]))
+        self.option_timeout.setValue(int(merged["timeout"]))
+        self.option_max_workers.setValue(int(merged["max_workers"]))
+        self.set_cme_config_json(self.display_cme_override_json(merged.get("cme_config_json")))
+        self.update_cme_config_preview()
 
     def set_schedule_options(self, schedule: dict[str, object]) -> None:
         merged = normalize_schedule(schedule)
-        self.schedule_enabled.set(bool(merged["enabled"]))
-        self.schedule_kind.set(SCHEDULE_KIND_LABELS.get(str(merged["kind"]), "매일"))
+        self.schedule_enabled.setChecked(bool(merged["enabled"]))
+        self._set_combo(self.schedule_kind, SCHEDULE_KIND_LABELS.get(str(merged["kind"]), "매일"), "매일")
         self.set_schedule_times(merged["times"])
         first_time = self.schedule_times_from_list()[0] if self.schedule_times_from_list() else "09:00"
         if ":" in first_time:
             hour, minute = first_time.split(":", 1)
-            self.schedule_hour.set(self._choice(hour, HOUR_VALUES, "09"))
-            self.schedule_minute.set(self._choice(minute, MINUTE_VALUES, "00"))
+            self._set_combo(self.schedule_hour, hour, "09")
+            self._set_combo(self.schedule_minute, minute, "00")
         selected_days: set[int] = set()
         for item in merged["days_of_week"]:
             try:
                 selected_days.add(int(item))
             except (TypeError, ValueError):
                 continue
-        for day in self.schedule_day_vars:
-            self.schedule_day_vars[day].set(day in selected_days)
-        self.schedule_day_of_month.set(str(merged["day_of_month"] or 1))
-        self.schedule_paused.set(bool(merged["paused"]))
+        for day, check in self.schedule_day_checks.items():
+            check.setChecked(day in selected_days)
+        self._set_combo(self.schedule_day_of_month, str(merged["day_of_month"] or 1), "1")
+        self.schedule_paused.setChecked(bool(merged["paused"]))
         self.update_schedule_condition_visibility()
 
     def schedule_from_editor(self) -> dict[str, object]:
         schedule = normalize_schedule(None)
         schedule.update(
             {
-                "enabled": self.schedule_enabled.get(),
-                "kind": SCHEDULE_KIND_VALUES.get(self.schedule_kind.get(), "daily"),
-                "times": self.schedule_times_from_list(),
-                "days_of_week": [day for day, selected in self.schedule_day_vars.items() if selected.get()],
-                "day_of_month": int(self.schedule_day_of_month.get() or 1),
+                "enabled": self.schedule_enabled.isChecked(),
+                "kind": SCHEDULE_KIND_VALUES.get(self.schedule_kind.currentText(), "daily"),
+                "times": self.schedule_times_from_list() or ["09:00"],
+                "days_of_week": [day for day, check in self.schedule_day_checks.items() if check.isChecked()],
+                "day_of_month": int(self.schedule_day_of_month.currentText() or 1),
                 "timezone": "Asia/Seoul",
                 "misfire_policy": "skip",
                 "concurrency_policy": "skip_if_running",
-                "paused": self.schedule_paused.get(),
+                "paused": self.schedule_paused.isChecked(),
             }
         )
         return schedule
 
-    def _choice(self, value: str, choices: tuple[str, ...], fallback: str) -> str:
-        return value if value in choices else fallback
+    def _set_combo(self, combo: QComboBox, value: str, fallback: str) -> None:
+        index = combo.findText(value)
+        if index < 0:
+            index = combo.findText(fallback)
+        combo.setCurrentIndex(max(0, index))
 
     def schedule_times_from_list(self) -> list[str]:
-        values = [str(self.schedule_times_list.get(index)) for index in range(self.schedule_times_list.size())]
-        return sorted(dict.fromkeys(values))
+        return sorted(dict.fromkeys(self.schedule_times_list.item(index).text() for index in range(self.schedule_times_list.count())))
 
     def set_schedule_times(self, values: object) -> None:
-        self.schedule_times_list.delete(0, tk.END)
+        self.schedule_times_list.clear()
         source = values if isinstance(values, list) else ["09:00"]
         for value in sorted(dict.fromkeys(str(item) for item in source if str(item).strip())):
-            self.schedule_times_list.insert(tk.END, value)
+            self.schedule_times_list.addItem(value)
 
     def add_schedule_time(self, value: str) -> None:
         value = value.strip()
         if not value:
             return
         existing = set(self.schedule_times_from_list())
-        if value not in existing:
-            existing.add(value)
+        existing.add(value)
         self.set_schedule_times(sorted(existing))
 
     def add_schedule_time_from_picker(self) -> None:
-        self.add_schedule_time(f"{self.schedule_hour.get()}:{self.schedule_minute.get()}")
+        self.add_schedule_time(f"{self.schedule_hour.currentText()}:{self.schedule_minute.currentText()}")
+        self.update_schedule_condition_visibility()
 
     def remove_selected_schedule_time(self) -> None:
-        selection = list(self.schedule_times_list.curselection())
-        for index in reversed(selection):
-            self.schedule_times_list.delete(index)
+        for item in self.schedule_times_list.selectedItems():
+            self.schedule_times_list.takeItem(self.schedule_times_list.row(item))
+        self.update_schedule_condition_visibility()
 
     def update_schedule_condition_visibility(self) -> None:
-        kind = SCHEDULE_KIND_VALUES.get(self.schedule_kind.get(), "daily")
-        self.weekly_frame.pack_forget()
-        self.monthly_frame.pack_forget()
-        if kind == "weekly":
-            self.weekly_frame.pack(fill="x", pady=5)
-        elif kind == "monthly":
-            self.monthly_frame.pack(fill="x", pady=5)
+        kind = SCHEDULE_KIND_VALUES.get(self.schedule_kind.currentText(), "daily")
+        enabled = self.schedule_enabled.isChecked()
+        self.weekly_widget.setVisible(kind == "weekly")
+        self.schedule_day_of_month.setVisible(kind == "monthly")
+        for widget in (
+            self.schedule_kind,
+            self.weekly_widget,
+            self.schedule_day_of_month,
+            self.schedule_hour,
+            self.schedule_minute,
+            self.add_schedule_time_button,
+            self.remove_schedule_time_button,
+            self.schedule_times_list,
+            self.schedule_paused,
+        ):
+            widget.setEnabled(enabled)
+        self.update_editor_next_run()
+
+    def update_editor_next_run(self) -> None:
+        if not hasattr(self, "schedule_next_run_label"):
+            return
+        job = Job(
+            id=self.editing_job_id or "draft",
+            name=self.job_name.text() or "draft",
+            confluence_url=self.job_url.text() or "https://example.atlassian.net/wiki",
+            target_dir=self.job_target.text() or str(default_workspace()),
+            include_children=self.include_children.isChecked(),
+            export_options=self.export_options_from_editor(),
+            schedule=self.schedule_from_editor(),
+        )
+        next_run = next_run_at(job)
+        self.schedule_next_run_label.setText(f"다음 실행: {_format_timestamp(next_run.isoformat()) if next_run else '-'}")
 
     def export_options_from_editor(self) -> dict[str, object]:
         return {
-            "cme_scope": self.option_cme_scope.get(),
-            "cme_urls": self.job_url.get(),
-            "cme_cloud_id": self.option_cme_cloud_id.get(),
+            "cme_scope": self.option_cme_scope.currentText(),
+            "cme_urls": self.job_url.text(),
             "cme_config_json": self.get_cme_config_json(),
-            "page_href": self.option_page_href.get(),
-            "attachment_href": self.option_attachment_href.get(),
-            "attachment_export_all": self.option_attachment_export_all.get(),
-            "page_breadcrumbs": self.option_page_breadcrumbs.get(),
-            "page_properties_as_front_matter": self.option_page_properties_as_front_matter.get(),
-            "include_document_title": self.option_include_document_title.get(),
-            "enable_jira_enrichment": self.option_enable_jira_enrichment.get(),
-            "skip_unchanged": self.option_skip_unchanged.get(),
-            "cleanup_stale": self.option_cleanup_stale.get(),
-            "verify_ssl": self.option_verify_ssl.get(),
-            "timeout": self._int_option(self.option_timeout.get(), DEFAULT_EXPORT_OPTIONS["timeout"]),
-            "max_workers": self._int_option(self.option_max_workers.get(), DEFAULT_EXPORT_OPTIONS["max_workers"]),
+            "page_href": self.option_page_href.currentText(),
+            "attachment_href": self.option_attachment_href.currentText(),
+            "attachment_export_all": self.option_attachment_export_all.isChecked(),
+            "page_breadcrumbs": self.option_page_breadcrumbs.isChecked(),
+            "page_properties_as_front_matter": self.option_page_properties_as_front_matter.isChecked(),
+            "include_document_title": self.option_include_document_title.isChecked(),
+            "enable_jira_enrichment": self.option_enable_jira_enrichment.isChecked(),
+            "skip_unchanged": self.option_skip_unchanged.isChecked(),
+            "cleanup_stale": self.option_cleanup_stale.isChecked(),
+            "verify_ssl": self.option_verify_ssl.isChecked(),
+            "timeout": self.option_timeout.value(),
+            "max_workers": self.option_max_workers.value(),
         }
 
-    def _int_option(self, value: str, default: object) -> int:
+    def display_cme_override_json(self, value: object) -> str:
+        text = str(value or "").strip()
+        if not text:
+            return "{}"
         try:
-            parsed = int(value)
-        except ValueError:
-            parsed = int(default)
-        return max(1, parsed)
+            data = parse_cme_config_json(text)
+        except AppError:
+            return text
+        default = json.loads(default_cme_config_json(self.job_target.text()))
+        if data == default:
+            return "{}"
+        return json.dumps(data, ensure_ascii=False, indent=2)
 
     def set_cme_config_json(self, value: str) -> None:
-        self.cme_config_json.set(value)
+        self.cme_config_text.setPlainText(value)
 
     def get_cme_config_json(self) -> str:
-        return self.cme_config_json.get().strip()
+        return self.cme_config_text.toPlainText().strip() or "{}"
+
+    def update_cme_config_preview(self) -> None:
+        if not hasattr(self, "cme_config_preview"):
+            return
+        try:
+            config = copy.deepcopy(DEFAULT_CME_CONFIG)
+            preview_job = Job(
+                id=self.editing_job_id or "draft",
+                name=self.job_name.text() or "draft",
+                confluence_url=self.job_url.text() or "https://example.atlassian.net/wiki",
+                target_dir=self.job_target.text() or str(default_workspace()),
+                include_children=self.include_children.isChecked(),
+                export_options=self.export_options_from_editor(),
+                schedule=self.schedule_from_editor() if hasattr(self, "schedule_times_list") else dict(DEFAULT_SCHEDULE),
+            )
+            apply_common_job_options(config, preview_job)
+            deep_merge(config, parse_cme_config_json(self.get_cme_config_json()))
+            config["export"]["output_path"] = str(preview_job.workspace)  # type: ignore[index]
+            self.cme_config_preview.setPlainText(json.dumps(config, ensure_ascii=False, indent=2))
+        except Exception as exc:
+            error = classify_exception(exc if isinstance(exc, Exception) else Exception(str(exc)))
+            self.cme_config_preview.setPlainText(f"JSON 형식을 확인하세요.\n{error.user_message}")
 
     def save_job(self) -> None:
         if not self.ensure_not_busy():
             return
         existing = self.store.load()
-        job_id = self.editing_job_id or stable_job_id(self.job_name.get(), {job.id for job in existing})
+        job_id = self.editing_job_id or stable_job_id(self.job_name.text(), {job.id for job in existing})
         job = Job(
             id=job_id,
-            name=self.job_name.get(),
-            confluence_url=self.job_url.get(),
-            target_dir=self.job_target.get(),
-            include_children=self.include_children.get(),
+            name=self.job_name.text(),
+            confluence_url=self.job_url.text(),
+            target_dir=self.job_target.text(),
+            include_children=self.include_children.isChecked(),
             include_attachments=False,
             export_options=self.export_options_from_editor(),
             schedule=self.schedule_from_editor(),
@@ -863,66 +1154,82 @@ class ConfluenceSyncApp(tk.Tk):
             validate_job(job, create_dirs=True)
             self.store.upsert(job)
             self.editing_job_id = job.id
-            self.editor_status.set(f"편집 중: {job.id}")
+            self.editor_status.setText(f"편집 중: {job.id}")
             self.refresh_jobs(select_job_id=job.id)
-            self.status_text.set(f"작업 저장됨: {job.name}")
-            self.tabs.select(self.jobs_tab)
-            messagebox.showinfo("저장됨", "작업이 저장되었습니다.")
+            self.set_status_text(f"작업 저장됨: {job.name}", "success")
+            self.sidebar.setCurrentRow(1)
+            QMessageBox.information(self, "저장됨", "작업이 저장되었습니다.")
         except Exception as exc:
             self.show_error(exc)
 
     def refresh_jobs(self, select_job_id: str | None = None) -> None:
-        for row in self.job_table.get_children():
-            self.job_table.delete(row)
+        self.job_list.clear()
         jobs = self.store.load()
+        self.job_list_stack.setCurrentIndex(1 if jobs else 0)
         for job in jobs:
-            scope = str(job.export_options.get("cme_scope") or "auto")
-            schedule = self.format_schedule_status(job)
-            row_id = job.id
-            self.job_table.insert("", "end", iid=row_id, values=(job.name, scope, schedule, job.target_dir))
+            item = QListWidgetItem()
+            item.setData(Qt.UserRole, job.id)
+            widget = self._job_list_item_widget(job)
+            item.setSizeHint(QSize(0, 92))
+            self.job_list.addItem(item)
+            self.job_list.setItemWidget(item, widget)
         if jobs:
             target = select_job_id if select_job_id in {job.id for job in jobs} else jobs[0].id
-            self.job_table.selection_set(target)
-            self.job_table.focus(target)
-            self.job_table.see(target)
+            for row in range(self.job_list.count()):
+                if self.job_list.item(row).data(Qt.UserRole) == target:
+                    self.job_list.setCurrentRow(row)
+                    break
         self.update_job_details()
 
     def selected_job(self) -> Job:
-        selection = self.job_table.selection()
-        if not selection:
+        items = self.job_list.selectedItems()
+        if not items:
             raise AppError("Config", "NO_JOB_SELECTED", "작업을 선택하세요.", "", False)
-        return self.store.get(str(selection[0]))
+        return self.store.get(str(items[0].data(Qt.UserRole)))
 
     def update_job_details(self) -> None:
         try:
             job = self.selected_job()
         except Exception:
+            self.set_job_actions_enabled(False)
             self.set_job_summary(None)
             self.set_run_history_rows([])
             return
+        self.set_job_actions_enabled(True)
         scope = str(job.export_options.get("cme_scope") or "auto")
         urls = str(job.export_options.get("cme_urls") or job.confluence_url)
         self.set_job_summary(job, scope, urls)
         self.set_run_history_rows(format_job_run_history_rows(job))
 
+    def set_job_actions_enabled(self, enabled: bool) -> None:
+        enabled = enabled and not self.busy
+        for widget in (self.sync_button, self.edit_button, self.open_target_button, self.delete_button):
+            widget.setEnabled(enabled)
+
     def set_job_summary(self, job: Job | None, scope: str = "-", urls: str = "-") -> None:
         if job is None:
-            self.job_summary_name.set("작업을 선택하세요.")
-            self.job_summary_scope.set("-")
-            self.job_summary_schedule.set("-")
-            self.job_summary_next_run.set("-")
-            self.job_summary_last_event.set("-")
-            self.job_summary_target.set("-")
-            self.job_summary_url.set("-")
-            return
-        self.job_summary_name.set(job.name or "-")
-        self.job_summary_scope.set(scope or "-")
-        self.job_summary_schedule.set(self.format_schedule_status(job))
-        next_run = next_run_at(job)
-        self.job_summary_next_run.set(_format_timestamp(next_run.isoformat()) if next_run else "-")
-        self.job_summary_last_event.set(self.format_last_scheduler_event(job.id))
-        self.job_summary_target.set(job.target_dir or "-")
-        self.job_summary_url.set(urls or "-")
+            values = {
+                "name": "작업을 선택하세요.",
+                "scope": "-",
+                "schedule": "-",
+                "next_run": "-",
+                "last_event": "-",
+                "target": "-",
+                "url": "-",
+            }
+        else:
+            next_run = next_run_at(job)
+            values = {
+                "name": job.name or "-",
+                "scope": scope or "-",
+                "schedule": self.format_schedule_status(job),
+                "next_run": _format_timestamp(next_run.isoformat()) if next_run else "-",
+                "last_event": self.format_last_scheduler_event(job.id),
+                "target": job.target_dir or "-",
+                "url": urls or "-",
+            }
+        for key, value in values.items():
+            self.job_summary_labels[key].setText(value)
 
     def format_schedule_status(self, job: Job) -> str:
         schedule = job.schedule
@@ -946,8 +1253,7 @@ class ConfluenceSyncApp(tk.Tk):
                     labels.append(day_names.get(int(day), str(day)))
                 except (TypeError, ValueError):
                     labels.append(str(day))
-            day_text = "/".join(labels)
-            return f"{label} {day_text} {time_text}"
+            return f"{label} {'/'.join(labels)} {time_text}"
         if schedule.get("kind") == "monthly":
             return f"{label} {schedule.get('day_of_month')}일 {time_text}"
         return f"{label} {time_text}"
@@ -959,15 +1265,13 @@ class ConfluenceSyncApp(tk.Tk):
         return "-"
 
     def set_run_history_rows(self, rows: list[tuple[str, str, str, str, str, str]]) -> None:
-        if not hasattr(self, "run_history_table"):
-            return
-        for row_id in self.run_history_table.get_children():
-            self.run_history_table.delete(row_id)
+        self.run_history_table.setRowCount(0)
         if not rows:
-            self.run_history_table.insert("", "end", values=("기록 없음", "-", "-", "-", "-", "-"))
-            return
-        for row in rows:
-            self.run_history_table.insert("", "end", values=row)
+            rows = [("기록 없음", "-", "-", "-", "-", "-")]
+        for row, values in enumerate(rows):
+            self.run_history_table.insertRow(row)
+            for column, value in enumerate(values):
+                self.run_history_table.setItem(row, column, QTableWidgetItem(value))
 
     def open_selected_target(self) -> None:
         if not self.ensure_not_busy():
@@ -1005,15 +1309,17 @@ class ConfluenceSyncApp(tk.Tk):
         on_start: Callable[[str], None] | None = None,
     ) -> None:
         if self.busy:
-            messagebox.showinfo("실행 중", "이미 실행 중인 작업이 있습니다.")
+            QMessageBox.information(self, "실행 중", "이미 실행 중인 작업이 있습니다.")
             return
         self.busy = True
-        self.status_text.set(f"{label} 실행 중")
-        self.configure(cursor="watch")
+        self.current_worker_label = label
+        self.current_success = on_success
+        self.current_error = on_error
+        self.set_status_text(f"{label} 실행 중", "warning")
         self.set_running_controls(label, True)
         start_text = f"{label} 실행 중...\n큰 Confluence 문서 트리는 시간이 걸릴 수 있습니다.\n"
         if on_start is None:
-            self.write_text(start_text)
+            self.set_status_text(start_text)
         else:
             on_start(start_text)
 
@@ -1021,91 +1327,96 @@ class ConfluenceSyncApp(tk.Tk):
             try:
                 result = work()
             except Exception as exc:
-                self.after(0, lambda exc=exc: self.finish_background_error(label, exc, on_error))
+                self.background_error.emit(exc)
             else:
-                self.after(0, lambda result=result: self.finish_background_success(label, on_success, result))
+                self.background_success.emit(result)
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def finish_background_success(self, label: str, on_success: Callable[[object], None], result: object) -> None:
+    def finish_background_success(self, result: object) -> None:
+        label = self.current_worker_label
+        callback = self.current_success
         self.busy = False
-        self.configure(cursor="")
         self.set_running_controls(label, False)
-        self.status_text.set(f"{label} 완료")
-        on_success(result)
+        self.set_status_text(f"{label} 완료", "success")
+        self.current_worker_label = ""
+        self.current_success = None
+        self.current_error = None
+        if callback is not None:
+            callback(result)
 
-    def finish_background_error(self, label: str, exc: Exception, on_error: Callable[[Exception], None] | None = None) -> None:
+    def finish_background_error(self, exc: object) -> None:
+        callback = self.current_error
+        label = self.current_worker_label
         self.busy = False
-        self.configure(cursor="")
         self.set_running_controls(label, False)
-        self.status_text.set("오류")
-        if on_error is None:
-            self.show_error(exc)
+        self.set_status_text("오류", "error")
+        self.current_worker_label = ""
+        self.current_success = None
+        self.current_error = None
+        if callback is None:
+            self.show_error(exc if isinstance(exc, Exception) else Exception(str(exc)))
         else:
-            on_error(exc)
+            callback(exc if isinstance(exc, Exception) else Exception(str(exc)))
 
     def set_running_controls(self, label: str, running: bool) -> None:
-        state = "disabled" if running else "normal"
-        for attr in (
-            "new_job_button",
-            "sync_button",
-            "edit_button",
-            "open_target_button",
-            "delete_button",
-            "save_job_button",
-            "new_editor_job_button",
-            "test_connection_button",
-            "logout_button",
+        enabled = not running
+        for widget in (
+            self.new_job_button,
+            self.sync_button,
+            self.edit_button,
+            self.open_target_button,
+            self.delete_button,
+            self.save_job_button,
+            self.new_editor_job_button,
+            self.test_connection_button,
+            self.logout_button,
         ):
-            if hasattr(self, attr):
-                getattr(self, attr).configure(state=state)
-        if hasattr(self, "sync_button"):
-            text = "동기화 중..." if running and label == "지금 동기화" else "지금 동기화"
-            self.sync_button.configure(text=text)
-        if hasattr(self, "test_connection_button"):
-            text = "테스트 중..." if running and label == "연결 테스트" else "연결 테스트"
-            self.test_connection_button.configure(text=text)
-        if running and hasattr(self, "save_create_button"):
-            self.save_create_button.configure(state="disabled")
-        elif hasattr(self, "save_create_button"):
+            widget.setEnabled(enabled)
+        self.sync_button.setText("동기화 중..." if running and label == "지금 동기화" else "지금 동기화")
+        self.test_connection_button.setText("테스트 중..." if running and label == "연결 테스트" else "연결 테스트")
+        if running:
+            self.save_create_button.setEnabled(False)
+        else:
             self.update_connection_actions()
+            self.set_job_actions_enabled(bool(self.job_list.selectedItems()))
 
     def delete_selected(self) -> None:
         if not self.ensure_not_busy():
             return
         try:
             job = self.selected_job()
-            if not messagebox.askyesno("작업 삭제", f"'{job.name}' 작업을 삭제할까요?"):
+            if QMessageBox.question(self, "작업 삭제", f"'{job.name}' 작업을 삭제할까요?") != QMessageBox.Yes:
                 return
             self.store.delete(job.id)
             self.refresh_jobs()
-            self.status_text.set(f"작업 삭제됨: {job.name}")
+            self.set_status_text(f"작업 삭제됨: {job.name}", "warning")
         except Exception as exc:
             self.show_error(exc)
 
     def save_settings(self, open_editor: bool = False) -> None:
         if not self.ensure_not_busy():
             return
-        token = self.token.get()
+        token = self.token.text()
         if not token:
-            token = _credential_store().read(self.base_url.get(), self.email.get()) or ""
-        errors = validate_auth_input(self.base_url.get(), self.email.get(), token)
+            token = _credential_store().read(self.base_url.text(), self.email.text()) or ""
+        errors = validate_auth_input(self.base_url.text(), self.email.text(), token)
         if errors:
-            messagebox.showerror("연결 정보", "\n".join(errors.values()))
+            QMessageBox.critical(self, "연결 정보", "\n".join(errors.values()))
             return
-        if self.connection_verified_fingerprint != self._connection_fingerprint(self.base_url.get(), self.email.get(), token):
-            messagebox.showerror("연결 테스트 필요", "현재 입력한 연결 정보로 연결 테스트를 먼저 통과해야 저장할 수 있습니다.")
+        if self.connection_verified_fingerprint != self._connection_fingerprint(self.base_url.text(), self.email.text(), token):
+            QMessageBox.critical(self, "연결 테스트 필요", "현재 입력한 연결 정보로 연결 테스트를 먼저 통과해야 저장할 수 있습니다.")
             return
         try:
-            if self.token.get():
-                _credential_store().write(self.base_url.get(), self.email.get(), self.token.get())
-            save_settings(self.base_url.get(), self.email.get())
-            self.token.set("")
-            self.status_text.set("연결 정보 저장됨")
+            if self.token.text():
+                _credential_store().write(self.base_url.text(), self.email.text(), self.token.text())
+            save_settings(self.base_url.text(), self.email.text())
+            self.token.setText("")
+            self.set_status_text("연결 정보 저장됨", "success")
             if open_editor:
                 self.new_job()
             else:
-                messagebox.showinfo("저장됨", "연결 정보가 저장되었습니다.")
+                QMessageBox.information(self, "저장됨", "연결 정보가 저장되었습니다.")
         except Exception as exc:
             self.show_error(exc)
 
@@ -1113,14 +1424,14 @@ class ConfluenceSyncApp(tk.Tk):
         if not self.ensure_not_busy():
             return
         try:
-            base_url = self.base_url.get()
-            email = self.email.get()
-            token = self.token.get() or _credential_store().read(base_url, email)
+            base_url = self.base_url.text()
+            email = self.email.text()
+            token = self.token.text() or _credential_store().read(base_url, email)
             if not token:
                 raise AppError("Auth", "TOKEN_NOT_FOUND", "API 토큰을 입력하거나 먼저 저장하세요.", "", False)
             errors = validate_auth_input(base_url, email, token)
             if errors:
-                messagebox.showerror("연결 정보", "\n".join(errors.values()))
+                QMessageBox.critical(self, "연결 정보", "\n".join(errors.values()))
                 return
             fingerprint = self._connection_fingerprint(base_url, email, token)
             self.run_background(
@@ -1136,55 +1447,72 @@ class ConfluenceSyncApp(tk.Tk):
     def logout(self) -> None:
         if not self.ensure_not_busy():
             return
-        _credential_store().delete(self.base_url.get(), self.email.get())
+        _credential_store().delete(self.base_url.text(), self.email.text())
         self.connection_verified_fingerprint = None
         self.update_connection_actions()
-        self.status_text.set("저장된 API 토큰 삭제됨")
+        self.set_status_text("저장된 API 토큰 삭제됨", "warning")
 
     def save_auto_start_setting(self) -> None:
-        enabled = bool(self.auto_start.get())
+        enabled = self.auto_start_check.isChecked()
         try:
             set_windows_auto_start(enabled)
             save_app_setting("auto_start", enabled)
+            self.auto_start = enabled
             if enabled:
-                self.status_text.set("Windows 로그인 자동 시작 설정이 저장되었습니다.")
+                self.set_status_text("Windows 로그인 자동 시작 설정이 저장되었습니다.", "success")
             else:
-                self.status_text.set("자동 시작 꺼짐: 완전 종료 중 예약 실행은 보장되지 않습니다.")
+                self.set_status_text("자동 시작 꺼짐: 완전 종료 중 예약 실행은 보장되지 않습니다.", "warning")
         except Exception as exc:
-            self.auto_start.set(not enabled)
+            self.auto_start_check.blockSignals(True)
+            self.auto_start_check.setChecked(not enabled)
+            self.auto_start_check.blockSignals(False)
             self.show_error(exc)
 
     def toggle_global_pause(self) -> None:
-        save_app_setting("schedule_paused", bool(self.global_schedule_paused.get()))
-        self.status_text.set("스케줄 일시정지" if self.global_schedule_paused.get() else "스케줄 재개")
+        self.global_schedule_paused = self.global_pause_check.isChecked()
+        save_app_setting("schedule_paused", self.global_schedule_paused)
+        self.set_status_text("스케줄 일시정지" if self.global_schedule_paused else "스케줄 재개", "warning" if self.global_schedule_paused else "success")
 
     def start_background_runtime(self) -> None:
+        if os.environ.get("CONFLUENCE_SYNC_DISABLE_TRAY") == "1":
+            self.tray_available = False
+            self.scheduler_runtime = SchedulerRuntime(
+                self.store.load,
+                self.run_scheduled_job,
+                coordinator=self.coordinator,
+                schedule_paused=lambda: self.global_schedule_paused,
+                notify_failure=lambda job, exc: self.scheduled_failure.emit(job, exc),
+            )
+            self.scheduler_runtime.start()
+            return
         self.tray_runtime = TrayRuntime(
             icon_path=_asset_path("app-256.png"),
-            show_window=lambda: self.after(0, self.show_from_tray),
-            quit_app=lambda: self.after(0, self.quit_from_tray),
-            toggle_pause=lambda: self.after(0, self.toggle_pause_from_tray),
+            show_window=lambda: self.show_window_requested.emit(),
+            quit_app=lambda: self.quit_requested.emit(),
+            toggle_pause=lambda: self.toggle_pause_requested.emit(),
         )
         self.tray_available = self.tray_runtime.start()
         if not self.tray_available:
             detail = f" ({self.tray_runtime.last_error})" if self.tray_runtime.last_error else ""
-            self.status_text.set(f"Tray 초기화 실패: 창을 닫으면 앱이 종료됩니다.{detail}")
+            self.set_status_text(f"Tray 초기화 실패: 창을 닫으면 앱이 종료됩니다.{detail}", "warning")
             return
         self.scheduler_runtime = SchedulerRuntime(
             self.store.load,
             self.run_scheduled_job,
             coordinator=self.coordinator,
-            schedule_paused=lambda: bool(self.global_schedule_paused.get()),
-            notify_failure=lambda job, exc: self.after(0, lambda job=job, exc=exc: self.notify_scheduled_failure(job, exc)),
+            schedule_paused=lambda: self.global_schedule_paused,
+            notify_failure=lambda job, exc: self.scheduled_failure.emit(job, exc),
         )
         self.scheduler_runtime.start()
 
     def run_scheduled_job(self, job: Job) -> dict[str, object]:
         return self._engine().apply(job, trigger="scheduled")
 
-    def notify_scheduled_failure(self, job: Job, exc: Exception) -> None:
+    def notify_scheduled_failure(self, job: object, exc: object) -> None:
+        if not isinstance(job, Job) or not isinstance(exc, Exception):
+            return
         error = classify_exception(exc)
-        self.status_text.set(f"예약 실행 실패: {job.name}")
+        self.set_status_text(f"예약 실행 실패: {job.name}", "error")
         self.update_job_details()
         if self.tray_runtime is not None:
             try:
@@ -1193,132 +1521,346 @@ class ConfluenceSyncApp(tk.Tk):
                 pass
 
     def show_from_tray(self) -> None:
-        self.deiconify()
-        self.lift()
-        self.focus_force()
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
         self.update_job_details()
 
     def quit_from_tray(self) -> None:
         if self.busy or self.coordinator.is_running():
-            messagebox.showinfo("실행 중", "현재 실행 중인 작업이 끝난 뒤 다시 종료하세요.")
+            QMessageBox.information(self, "실행 중", "현재 실행 중인 작업이 끝난 뒤 다시 종료하세요.")
             return
         if self.scheduler_runtime is not None:
             self.scheduler_runtime.stop()
         if self.tray_runtime is not None:
             self.tray_runtime.stop()
-        self.destroy()
+        QApplication.instance().quit()
 
     def toggle_pause_from_tray(self) -> None:
-        self.global_schedule_paused.set(not self.global_schedule_paused.get())
-        self.toggle_global_pause()
+        self.global_pause_check.setChecked(not self.global_pause_check.isChecked())
 
     def ensure_not_busy(self) -> bool:
         if self.busy or self.coordinator.is_running():
-            messagebox.showinfo("실행 중", "현재 작업이 끝날 때까지 기다려 주세요.")
+            QMessageBox.information(self, "실행 중", "현재 작업이 끝날 때까지 기다려 주세요.")
             return False
         return True
 
-    def on_close(self) -> None:
+    def closeEvent(self, event: QCloseEvent) -> None:
         if self.busy or self.coordinator.is_running():
-            messagebox.showinfo("실행 중", "현재 작업이 끝난 뒤 창을 닫아 주세요.")
+            QMessageBox.information(self, "실행 중", "현재 작업이 끝난 뒤 창을 닫아 주세요.")
+            event.ignore()
             return
         if not self.tray_available:
-            self.destroy()
+            event.accept()
             return
-        self.withdraw()
+        event.ignore()
+        self.hide()
         if not self.close_notice_shown:
             self.close_notice_shown = True
-            messagebox.showinfo("Background 실행", "창을 닫아도 예약 동기화가 tray/background에서 계속 실행됩니다.")
-
-    def write_result(self, data: object) -> None:
-        self.write_text(mask_sensitive(json.dumps(data, ensure_ascii=False, indent=2)))
+            QMessageBox.information(self, "Background 실행", "창을 닫아도 예약 동기화가 tray/background에서 계속 실행됩니다.")
 
     def write_sync_text(self, text: str) -> None:
-        self.status_text.set(mask_sensitive(text).strip().splitlines()[0])
+        self.set_status_text(mask_sensitive(text).strip().splitlines()[0])
 
     def write_sync_result(self, data: object) -> None:
         summary = data.get("summary") if isinstance(data, dict) and isinstance(data.get("summary"), dict) else {}
         created = int(summary.get("created", 0)) if isinstance(summary, dict) else 0
         updated = int(summary.get("updated", 0)) if isinstance(summary, dict) else 0
-        exported = created + updated
         deleted = int(summary.get("deleted", 0)) if isinstance(summary, dict) else 0
         skipped = int(summary.get("skipped", 0)) if isinstance(summary, dict) else 0
         errors = int(summary.get("errors", 0)) if isinstance(summary, dict) else 0
         if errors:
-            self.status_text.set("동기화 완료")
+            self.set_status_text("동기화 완료", "warning")
             self.update_job_details()
-            messagebox.showwarning("동기화 완료", "동기화가 끝났지만 오류가 기록되었습니다.")
+            QMessageBox.warning(self, "동기화 완료", "동기화가 끝났지만 오류가 기록되었습니다.")
             return
-        self.status_text.set("동기화 성공")
+        exported = created + updated
+        self.set_status_text(f"동기화 성공 · 생성/업데이트 {exported} · 삭제 {deleted} · 건너뜀 {skipped}", "success")
         self.update_job_details()
-        messagebox.showinfo("동기화 성공", "Confluence 문서 동기화가 완료되었습니다.")
+        QMessageBox.information(self, "동기화 성공", "Confluence 문서 동기화가 완료되었습니다.")
 
     def show_sync_error(self, exc: Exception) -> None:
         error = classify_exception(exc)
-        self.status_text.set("동기화 실패")
+        self.set_status_text("동기화 실패", "error")
         try:
             self.set_run_history_rows(format_job_run_history_rows(self.selected_job()))
         except Exception:
             pass
-        messagebox.showerror(error.category, error.user_message)
+        QMessageBox.critical(self, error.category, error.user_message)
 
     def write_connection_text(self, text: str) -> None:
-        self.status_text.set(mask_sensitive(text).strip().splitlines()[0])
+        self.set_status_text(mask_sensitive(text).strip().splitlines()[0])
 
     def write_connection_result(self, data: object, fingerprint: str) -> None:
         ok = isinstance(data, dict) and data.get("ok") is True
         if ok:
             self.connection_verified_fingerprint = fingerprint
-            messagebox.showinfo("연결 테스트 성공", "Confluence 연결 테스트를 통과했습니다. 이제 저장 후 작업 만들기를 진행할 수 있습니다.")
-        else:
-            self.connection_verified_fingerprint = None
+            self.update_connection_actions()
+            self.set_status_text("연결 테스트 성공", "success")
+            QMessageBox.information(self, "연결 테스트 성공", "Confluence 연결 테스트를 통과했습니다. 이제 저장 후 작업 만들기를 진행할 수 있습니다.")
+            return
+        self.connection_verified_fingerprint = None
         self.update_connection_actions()
-        self.status_text.set("연결 테스트 성공" if ok else "연결 테스트 실패")
+        self.set_status_text("연결 테스트 실패", "error")
 
     def show_connection_error(self, exc: Exception) -> None:
         self.connection_verified_fingerprint = None
         self.update_connection_actions()
         error = classify_exception(exc)
-        self.status_text.set("연결 테스트 실패")
-        messagebox.showerror(error.category, error.user_message)
-
-    def _connection_fingerprint(self, base_url: str, email: str, token: str) -> str:
-        normalized = "\n".join([base_url.strip().rstrip("/"), email.strip().lower(), token])
-        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+        self.set_status_text("연결 테스트 실패", "error")
+        QMessageBox.critical(self, error.category, error.user_message)
 
     def connection_inputs_changed(self, *_args: object) -> None:
-        if self.connection_verified_fingerprint is not None:
-            self.connection_verified_fingerprint = None
+        self.connection_verified_fingerprint = None
         self.update_connection_actions()
 
     def update_connection_actions(self) -> None:
-        if hasattr(self, "save_create_button"):
-            state = "normal" if self.connection_verified_fingerprint is not None else "disabled"
-            self.save_create_button.configure(state=state)
+        token = self.token.text()
+        if not token:
+            try:
+                token = _credential_store().read(self.base_url.text(), self.email.text()) or ""
+            except Exception:
+                token = ""
+        verified = self.connection_verified_fingerprint == self._connection_fingerprint(self.base_url.text(), self.email.text(), token)
+        self.save_create_button.setEnabled(bool(verified) and not self.busy)
 
-    def write_text(self, text: str) -> None:
-        masked = mask_sensitive(text).strip()
-        self.status_text.set(masked.splitlines()[0] if masked else "준비됨")
+    def _connection_fingerprint(self, base_url: str, email: str, token: str) -> str:
+        payload = json.dumps({"base_url": base_url.strip(), "email": email.strip(), "token": token}, sort_keys=True)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-    def append_text(self, text: str) -> None:
-        masked = mask_sensitive(text).strip()
-        if masked:
-            self.status_text.set(masked.splitlines()[0])
+    def threadsafe_progress(self, text: str, _current: int, _total: int) -> None:
+        self.progress_message.emit(mask_sensitive(text).strip().splitlines()[0] if text.strip() else "준비됨")
 
-    def threadsafe_progress(self, message: str, done: int, total: int) -> None:
-        suffix = f" ({done}/{total})" if total else ""
-        self.after(0, lambda: self.append_text(f"{message}{suffix}\n"))
+    def set_status_text(self, text: str, tone: str = "info") -> None:
+        clean = mask_sensitive(text).strip().splitlines()[0] if text.strip() else "준비됨"
+        self.status_badge.setText(clean)
+        self.status_badge.set_tone(tone)
 
     def show_error(self, exc: Exception) -> None:
         error = classify_exception(exc)
-        self.status_text.set("오류")
-        messagebox.showerror(error.category, error.user_message)
+        self.set_status_text("오류", "error")
+        QMessageBox.critical(self, error.category, error.user_message)
+
+
+APP_STYLESHEET = f"""
+QMainWindow, QWidget {{
+    background: {BG};
+    color: {TEXT};
+    font-family: "{APP_FONT}";
+    font-size: 10pt;
+}}
+QLabel {{
+    background: transparent;
+}}
+QFrame#SidebarFrame {{
+    background: #101828;
+    border: 0;
+    min-width: 212px;
+    max-width: 212px;
+}}
+QLabel#SidebarBrand {{
+    color: white;
+    font-size: 14pt;
+    font-weight: 800;
+}}
+QLabel#SidebarHint {{
+    color: #98a2b3;
+    font-size: 9pt;
+}}
+QListWidget#Sidebar {{
+    background: transparent;
+    color: #d1d5db;
+    border: 0;
+    padding: 6px 0;
+    font-weight: 600;
+    outline: 0;
+}}
+QListWidget#Sidebar::item {{
+    border-radius: 8px;
+    padding: 11px 12px;
+    margin: 2px 0;
+}}
+QListWidget#Sidebar::item:hover {{
+    background: #1d2939;
+    color: white;
+}}
+QListWidget#Sidebar::item:selected {{
+    background: {ACCENT};
+    color: white;
+}}
+QLabel#AppTitle {{
+    font-size: 19pt;
+    font-weight: 800;
+}}
+QLabel#PageTitle {{
+    font-size: 14pt;
+    font-weight: 700;
+}}
+QLabel#SectionTitle {{
+    font-size: 12pt;
+    font-weight: 700;
+}}
+QLabel#MutedLabel {{
+    color: {MUTED};
+}}
+QLabel#FieldLabel {{
+    color: {MUTED};
+    font-weight: 600;
+    min-width: 150px;
+}}
+QLabel#FieldValue {{
+    color: {TEXT};
+}}
+QFrame#Card {{
+    background: {SURFACE};
+    border: 1px solid #e4e9f2;
+    border-radius: 8px;
+    padding: 18px;
+}}
+QFrame#InsetCard {{
+    background: #f8fafc;
+    border: 1px solid #e4e9f2;
+    border-radius: 8px;
+    padding: 12px;
+}}
+QFrame#JobCard {{
+    background: #ffffff;
+    border: 1px solid #e4e9f2;
+    border-radius: 8px;
+}}
+QFrame#JobCard:hover {{
+    border-color: #b9c8f8;
+    background: #fbfdff;
+}}
+QLabel#JobCardTitle {{
+    font-weight: 700;
+    color: {TEXT};
+}}
+QLineEdit, QTextEdit, QComboBox, QSpinBox, QListWidget, QTableWidget {{
+    background: white;
+    border: 1px solid #ccd4e0;
+    border-radius: 6px;
+    padding: 7px;
+    selection-background-color: #dbeafe;
+}}
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus, QSpinBox:focus {{
+    border: 1px solid {FOCUS};
+}}
+QLineEdit#PathField {{
+    font-family: "{MONO}";
+}}
+QListWidget#JobList {{
+    border: 0;
+    background: transparent;
+    padding: 0;
+}}
+QListWidget#JobList::viewport {{
+    background: transparent;
+}}
+QListWidget#JobList::item {{
+    margin: 0 0 8px 0;
+    border-radius: 8px;
+}}
+QListWidget#JobList::item:selected {{
+    background: #dbeafe;
+}}
+QTableWidget {{
+    gridline-color: #e4e9f2;
+    alternate-background-color: #f8fafc;
+    border: 1px solid #e4e9f2;
+}}
+QHeaderView::section {{
+    background: #f8fafc;
+    border: 0;
+    border-right: 1px solid #e4e9f2;
+    border-bottom: 1px solid #e4e9f2;
+    padding: 8px;
+    font-weight: 700;
+}}
+QTabWidget::pane {{
+    border: 1px solid #e4e9f2;
+    border-radius: 8px;
+    background: white;
+    top: -1px;
+}}
+QWidget#TabSurface {{
+    background: white;
+}}
+QSplitter::handle {{
+    background: #edf2f7;
+}}
+QSplitter::handle:hover {{
+    background: #d9e3f0;
+}}
+QTabBar::tab {{
+    background: #f1f5f9;
+    color: {MUTED};
+    padding: 10px 18px;
+    border: 1px solid #d9e1ee;
+    border-bottom: 0;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    margin-right: 3px;
+}}
+QTabBar::tab:hover {{
+    background: #e8eef7;
+    color: {TEXT};
+}}
+QTabBar::tab:selected {{
+    background: white;
+    color: {TEXT};
+    font-weight: 700;
+}}
+QPushButton {{
+    border-radius: 7px;
+    padding: 8px 14px;
+    font-weight: 700;
+    min-height: 20px;
+}}
+QPushButton[role="primary"] {{
+    background: {ACCENT};
+    color: white;
+    border: 1px solid {ACCENT};
+}}
+QPushButton[role="primary"]:hover {{
+    background: {ACCENT_DARK};
+    border-color: {ACCENT_DARK};
+}}
+QPushButton[role="secondary"] {{
+    background: white;
+    color: {TEXT};
+    border: 1px solid #cbd5e1;
+}}
+QPushButton[role="secondary"]:hover {{
+    background: #f8fafc;
+    border-color: #9aa8bd;
+}}
+QPushButton[role="danger"] {{
+    background: {DANGER};
+    color: white;
+    border: 1px solid {DANGER};
+}}
+QPushButton[role="danger"]:hover {{
+    background: #912018;
+    border-color: #912018;
+}}
+QPushButton:disabled {{
+    background: #eef2f6;
+    color: #98a2b3;
+    border-color: #d7dee8;
+}}
+QCheckBox {{
+    spacing: 8px;
+}}
+"""
 
 
 def main() -> int:
-    app = ConfluenceSyncApp()
-    app.mainloop()
-    return 0
+    app = QApplication.instance() or QApplication(sys.argv)
+    configure_application_font()
+    window = ConfluenceSyncApp()
+    window.show()
+    return int(app.exec())
 
 
 if __name__ == "__main__":

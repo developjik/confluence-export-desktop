@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import tempfile
 import unittest
 
 from confluence_sync_tool.cli import EXIT_BY_CATEGORY, build_parser
@@ -35,8 +37,6 @@ class GuiCliTests(unittest.TestCase):
                 "--no-cleanup-stale",
                 "--cme-scope",
                 "spaces",
-                "--cme-cloud-id",
-                "cloud-123",
                 "--timeout",
                 "11",
                 "--max-workers",
@@ -48,7 +48,7 @@ class GuiCliTests(unittest.TestCase):
         self.assertTrue(args.attachment_export_all)
         self.assertFalse(args.cleanup_stale)
         self.assertEqual(args.cme_scope, "spaces")
-        self.assertEqual(args.cme_cloud_id, "cloud-123")
+        self.assertFalse(hasattr(args, "cme_cloud_id"))
         self.assertEqual(args.timeout, 11)
         self.assertEqual(args.max_workers, 3)
         self.assertFalse(hasattr(args, "backend"))
@@ -83,20 +83,26 @@ class GuiCliTests(unittest.TestCase):
 
         source = inspect.getsource(gui_module)
         for label in [
+            "QApplication",
+            "QMainWindow",
+            "QStackedWidget",
+            "QListWidget",
+            "QTableWidget",
             "Confluence 문서 동기화",
-            "1260x860",
-            "_scrollable_frame",
-            "MouseWheel",
             "연결",
             "작업",
             "작업 설정",
-            "AppTitle.TLabel",
-            "Status.TLabel",
-            "Treeview",
-            "padding=[(\"selected\", \"14 8 14 8\")",
+            "StatusBadge",
+            "Sidebar",
+            "AppTitle",
             "선택한 작업",
-            "FieldName.TLabel",
-            "FieldValue.TLabel",
+            "JobList",
+            "저장된 작업이 없습니다",
+            "새 작업 만들기",
+            "_job_list_item_widget",
+            "set_job_actions_enabled",
+            "FieldLabel",
+            "FieldValue",
             "_job_summary_row",
             "set_job_summary",
             "작업명",
@@ -109,8 +115,6 @@ class GuiCliTests(unittest.TestCase):
             "지금 동기화",
             "동기화 중...",
             "set_running_controls",
-            "Edit.TButton",
-            "set_jobs_pane_ratio",
             "편집",
             "대상 폴더 열기",
             "삭제",
@@ -139,7 +143,7 @@ class GuiCliTests(unittest.TestCase):
             "2. 저장 및 작업 생성",
             "계정 관리",
             "저장된 토큰 삭제",
-            "state=\"disabled\"",
+            "setEnabled(False)",
             "API 토큰은 Windows Credential Manager에만 저장됩니다.",
             "Confluence 접속 정보를 입력하고 연결 테스트를 통과해야 저장할 수 있습니다.",
             "현재 입력한 연결 정보로 연결 테스트를 먼저 통과해야 저장할 수 있습니다.",
@@ -148,6 +152,12 @@ class GuiCliTests(unittest.TestCase):
             "Confluence URL",
             "기본 정보",
             "CME 옵션",
+            "고급 JSON",
+            "CME Override JSON",
+            "최종 설정 미리보기",
+            "cme_config_text",
+            "cme_config_preview",
+            "update_cme_config_preview",
             "CME 범위",
             "페이지 링크",
             "첨부파일 링크",
@@ -181,7 +191,6 @@ class GuiCliTests(unittest.TestCase):
             "format_job_log_details",
             "run_setup_checker",
             "refresh_logs",
-            "CME Cloud ID",
             "작업 상세",
             "최근 결과",
             "job_detail_text",
@@ -209,11 +218,10 @@ class GuiCliTests(unittest.TestCase):
             "직접 입력",
             "schedule_direct_time",
             "add_schedule_time_from_direct",
-            "고급 JSON",
-            "CME Config JSON",
-            "cme_config_text",
         ]:
             self.assertNotIn(removed_label, source)
+        self.assertNotIn("import tkinter", source)
+        self.assertNotIn("ttk.", source)
         self.assertNotIn("Exporter Backend", source)
         self.assertNotIn("attachment_policy", source)
 
@@ -223,6 +231,50 @@ class GuiCliTests(unittest.TestCase):
         spec = Path("packaging/confluence-sync-gui.spec").read_text(encoding="utf-8")
         self.assertIn("app-32.png", spec)
         self.assertIn("app-256.png", spec)
+        self.assertIn("PySide6", spec)
+        self.assertNotIn("tkinter", spec)
+
+    def test_gui_defaults_to_empty_jobs_override_json_and_disabled_schedule_controls(self):
+        previous_qt_platform = os.environ.get("QT_QPA_PLATFORM")
+        previous_disable_tray = os.environ.get("CONFLUENCE_SYNC_DISABLE_TRAY")
+        os.environ["QT_QPA_PLATFORM"] = "offscreen"
+        os.environ["CONFLUENCE_SYNC_DISABLE_TRAY"] = "1"
+        previous_appdata = os.environ.get("APPDATA")
+        try:
+            with tempfile.TemporaryDirectory() as temp_root:
+                os.environ["APPDATA"] = temp_root
+                from PySide6.QtWidgets import QApplication
+
+                from confluence_sync_tool.gui import ConfluenceSyncApp
+
+                app = QApplication.instance() or QApplication([])
+                window = ConfluenceSyncApp()
+                try:
+                    self.assertEqual(window.cme_config_text.toPlainText().strip(), "{}")
+                    self.assertIn("connection_config", window.cme_config_preview.toPlainText())
+                    self.assertEqual(window.job_list_stack.currentIndex(), 0)
+                    self.assertFalse(window.sync_button.isEnabled())
+                    self.assertFalse(window.schedule_kind.isEnabled())
+                    window.schedule_enabled.setChecked(True)
+                    self.assertTrue(window.schedule_kind.isEnabled())
+                finally:
+                    if window.scheduler_runtime is not None:
+                        window.scheduler_runtime.stop()
+                    window.close()
+                    app.processEvents()
+        finally:
+            if previous_appdata is None:
+                os.environ.pop("APPDATA", None)
+            else:
+                os.environ["APPDATA"] = previous_appdata
+            if previous_qt_platform is None:
+                os.environ.pop("QT_QPA_PLATFORM", None)
+            else:
+                os.environ["QT_QPA_PLATFORM"] = previous_qt_platform
+            if previous_disable_tray is None:
+                os.environ.pop("CONFLUENCE_SYNC_DISABLE_TRAY", None)
+            else:
+                os.environ["CONFLUENCE_SYNC_DISABLE_TRAY"] = previous_disable_tray
 
     def test_plan_display_focuses_on_cme_job_and_skip_errors(self):
         text = format_plan_display(

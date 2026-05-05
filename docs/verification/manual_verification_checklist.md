@@ -6,7 +6,6 @@ Local automated verification is passing:
 
 - `python -m unittest`
 - `python scripts\verify_release.py`
-- `dist\confluence-sync-cli\confluence-sync-cli.exe check`
 - `python scripts\smoke_built_apps.py`
 
 External verification can be captured with:
@@ -30,35 +29,31 @@ To import returned evidence:
 
 ## PKG / Clean Windows Without Python
 
-Purpose: prove the onedir GUI/CLI builds run on a user machine without Python, pip, repository checkout, or PATH configuration.
+Purpose: prove the default onedir GUI build runs on a user machine without Python, pip, repository checkout, or PATH configuration.
 
 Required environment:
 
 - Clean Windows 10 or Windows 11 VM
 - No Python installation
-- Built `dist\confluence-sync` and `dist\confluence-sync-cli` folders, or the external verification bundle
+- Built `dist\confluence-sync` folder, or the external verification bundle
 
 Steps:
 
-1. Copy `dist\confluence-sync` and `dist\confluence-sync-cli` to the VM.
-2. Run `dist\confluence-sync-cli\confluence-sync-cli.exe check`.
-3. Launch `dist\confluence-sync\confluence-sync.exe`.
-4. Move both onedir folders to a different path and repeat steps 2 and 3.
-5. Optional: copy the repo `scripts` folder and run `.\scripts\verify_external_gates.ps1 -Mode Package`.
+1. Copy `dist\confluence-sync` to the VM.
+2. Launch `dist\confluence-sync\confluence-sync.exe`.
+3. Move the onedir folder to a different path and repeat step 2.
+4. Optional: copy the repo `scripts` folder and run `.\scripts\verify_external_gates.ps1 -Mode Package`.
 
 Pass criteria:
 
-- CLI `check` exits with code `0`.
-- CLI `check` reports `CME package import ok`.
 - GUI opens without Python installed.
-- `연결`, `작업`, `작업 설정` tabs are visible.
-- `Setup Checker` and `Logs` tabs are not visible.
+- `연결`, `작업`, `작업 설정` sidebar sections are visible.
+- `Setup Checker` and `Logs` sections are not visible.
 - Moving the onedir folders does not break startup.
 - `external_gates.json` reports `python_install_detected: false`.
 
 Evidence to save:
 
-- CLI output
 - Screenshot of GUI first screen
 - VM image/version note
 - Any antivirus/EDR warning note
@@ -66,7 +61,7 @@ Evidence to save:
 
 ## Live Confluence Verification
 
-Purpose: prove a packaged CLI can authenticate and run a CME export against Confluence Cloud.
+Purpose: prove the optional packaged developer CLI can authenticate and run a CME export against Confluence Cloud.
 
 Required input:
 
@@ -79,6 +74,7 @@ Required input:
 Recommended automated runner:
 
 ```powershell
+.\scripts\build.ps1 -IncludeCli
 $env:CONFLUENCE_SYNC_BASE_URL = "https://company.atlassian.net"
 $env:CONFLUENCE_SYNC_EMAIL = "user@example.com"
 $env:CONFLUENCE_SYNC_API_TOKEN = "<token>"
