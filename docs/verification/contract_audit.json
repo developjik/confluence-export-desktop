@@ -1,0 +1,122 @@
+{
+  "generated_at": "2026-05-05T01:37:24+09:00",
+  "baseline": "docs/PRD_v1.0.md",
+  "mode": "cme-only",
+  "summary": {
+    "contract_items": 14,
+    "external_or_partial": [
+      "GUI-UX-LABELS-01",
+      "PACKAGING-STRUCTURE-01",
+      "LIVE-CONFLUENCE-01"
+    ]
+  },
+  "contracts": {
+    "DOC-PRD-01": {
+      "status": "present",
+      "evidence": [
+        "docs/PRD_v1.0.md"
+      ]
+    },
+    "DOC-CME-01": {
+      "status": "present",
+      "evidence": [
+        "docs/CME_FEATURE_SUPPORT.md"
+      ]
+    },
+    "CLI-COMMANDS-01": {
+      "status": "automated",
+      "evidence": [
+        "test_cli_contains_required_commands_and_excludes_schedule"
+      ]
+    },
+    "CLI-JSON-01": {
+      "status": "automated",
+      "evidence": [
+        "emit_json",
+        "CLI smoke outputs"
+      ]
+    },
+    "DATA-JOBS-01": {
+      "status": "automated",
+      "evidence": [
+        "Job.to_dict/from_dict",
+        "JobStore",
+        "test_data_jobs_01_export_options_round_trip"
+      ]
+    },
+    "DATA-PLAN-01": {
+      "status": "automated",
+      "evidence": [
+        "SyncPlan.to_dict",
+        "preview wrapper tests"
+      ]
+    },
+    "DATA-RUN-HISTORY-01": {
+      "status": "automated",
+      "evidence": [
+        "append_run_history",
+        "apply success/failure tests"
+      ]
+    },
+    "CME-CONFIG-01": {
+      "status": "automated",
+      "evidence": [
+        "DEFAULT_CME_CONFIG",
+        "apply_common_job_options",
+        "deep_merge"
+      ]
+    },
+    "CME-ADAPTER-01": {
+      "status": "automated",
+      "evidence": [
+        "execute_cme",
+        "run_cme_export",
+        "injected exporter tests"
+      ]
+    },
+    "DRY-RUN-WRITE-01": {
+      "status": "automated",
+      "evidence": [
+        "SyncEngine.dry_run",
+        "workspace hash tests"
+      ]
+    },
+    "GUI-UX-LABELS-01": {
+      "status": "partial_external",
+      "evidence": [
+        "GUI source label/action assertions"
+      ],
+      "missing": "manual GUI/UAT observation"
+    },
+    "SECURITY-01": {
+      "status": "automated",
+      "evidence": [
+        "Credential Manager smoke",
+        "token masking tests",
+        "temp config lifecycle"
+      ]
+    },
+    "PACKAGING-STRUCTURE-01": {
+      "status": "partial_external",
+      "evidence": [
+        "PyInstaller specs",
+        "scripts/build.ps1",
+        "built app smoke"
+      ],
+      "missing": "clean Windows VM without Python"
+    },
+    "LIVE-CONFLUENCE-01": {
+      "status": "external_required",
+      "evidence": [
+        "scripts/verify_external_gates.ps1 -Mode LiveConfluence"
+      ],
+      "missing": "real credentials and target URL"
+    }
+  },
+  "removed_contracts": [
+    "DATA-MANIFEST-01",
+    "app-owned conflict folder contracts",
+    "app-owned deleted folder contracts",
+    "internal Markdown exporter contracts"
+  ]
+}

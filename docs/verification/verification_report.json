@@ -1,0 +1,74 @@
+{
+  "updated_at": "2026-05-05T01:37:24+09:00",
+  "baseline": "docs/PRD_v1.0.md",
+  "mode": "cme-only",
+  "summary": {
+    "local_verification_status": "pass",
+    "product_boundary": "Windows GUI/CLI runner for confluence-markdown-exporter==4.1.1",
+    "superseded_boundary_removed": [
+      "internal exporter",
+      "internal manifest",
+      "app-owned conflict/deleted preservation",
+      "page-level preview diff"
+    ],
+    "external_remaining": [
+      "live_confluence_export",
+      "package_clean_vm",
+      "non_developer_uat"
+    ]
+  },
+  "local_command_evidence": {
+    "coverage_report": "docs/verification/coverage_report.md",
+    "compileall": "pass",
+    "unittest": "pass",
+    "source_cli_check": "pass",
+    "credential_manager_smoke": "pass",
+    "built_cli_check": "pass",
+    "built_gui_exists": "pass",
+    "built_apps_smoke": "pass"
+  },
+  "verified_contracts": [
+    "SyncEngine uses the CME exporter adapter for apply.",
+    "Preview and Dry Run validate Job/CME config/target path and do not compute an internal page diff.",
+    "Dry Run preserves workspace content.",
+    "GUI and CLI expose CME job options and no internal backend selector.",
+    "CLI commands include check, login, logout, list-jobs, add-job, preview, dry-run, run, and validate.",
+    "Token storage uses Windows Credential Manager and token-stdin smoke output does not leak the sentinel token.",
+    "Built CLI imports the CME package from the PyInstaller bundle.",
+    "Built GUI launches from dist/confluence-sync/confluence-sync.exe."
+  ],
+  "release_gates": {
+    "compile_and_tests": {
+      "status": "pass",
+      "evidence": "coverage_report.md"
+    },
+    "cme_only_engine_and_config": {
+      "status": "pass",
+      "evidence": "tests/test_cme_backend.py and tests/test_engine.py"
+    },
+    "gui_cli_surface": {
+      "status": "pass",
+      "evidence": "tests/test_exporter_gui_cli.py"
+    },
+    "credential_handling": {
+      "status": "pass",
+      "evidence": "tests/test_security_validation.py and scripts/credential_manager_smoke.py"
+    },
+    "built_package_smoke": {
+      "status": "pass_local",
+      "evidence": "scripts/smoke_built_apps.py"
+    },
+    "live_confluence_export": {
+      "status": "external_remaining",
+      "missing": "real base URL, email, token, and target page/space/org"
+    },
+    "clean_windows_without_python": {
+      "status": "external_remaining",
+      "missing": "clean VM package evidence"
+    },
+    "non_developer_gui_uat": {
+      "status": "external_remaining",
+      "missing": "completed UAT observation"
+    }
+  }
+}

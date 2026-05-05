@@ -1,0 +1,65 @@
+{
+  "generated_at": "2026-05-05T10:38:22+09:00",
+  "mode": "gui-background-runtime",
+  "checks": {
+    "cme_only_engine": "SyncEngine uses CME exporter adapter only",
+    "cme_only_gui": "GUI exposes CME Job options and no internal backend selector",
+    "cme_config_template": "CME 4.1.1 export and connection_config options are present",
+    "dry_run_wrapper": "Preview/Dry Run validate config and do not calculate internal page diffs",
+    "packaging": "PyInstaller bundles GUI and confluence-markdown-exporter modules"
+  },
+  "commands": {
+    "compileall": {
+      "args": [
+        "C:\\Users\\developjik\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+        "-m",
+        "compileall",
+        "-q",
+        "src",
+        "tests",
+        "scripts"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "unittest": {
+      "args": [
+        "C:\\Users\\developjik\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+        "-m",
+        "unittest"
+      ],
+      "returncode": 0,
+      "stdout": "",
+      "stderr": "............................................................\n----------------------------------------------------------------------\nRan 60 tests in 0.643s\n\nOK\n"
+    },
+    "credential_manager_smoke": {
+      "args": [
+        "C:\\Users\\developjik\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+        "scripts/credential_manager_smoke.py"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"ok\": true,\n  \"credential_key\": \"ConfluenceSync:https://credential-smoke.invalid:codex-smoke-e621e5a6378b488cba377a68b29a708d@example.invalid\",\n  \"read_back_matches\": true,\n  \"deleted\": true\n}\n",
+      "stderr": ""
+    },
+    "built_gui_exists": {
+      "returncode": 0,
+      "exists": true,
+      "path": "C:\\Users\\developjik\\Desktop\\Confluence-Sync-Tool\\dist\\confluence-sync\\confluence-sync.exe"
+    },
+    "built_apps_smoke": {
+      "args": [
+        "C:\\Users\\developjik\\AppData\\Local\\Programs\\Python\\Python312\\python.exe",
+        "scripts/smoke_built_apps.py"
+      ],
+      "returncode": 0,
+      "stdout": "{\n  \"built_gui_launch\": {\n    \"ok\": true,\n    \"running_after_seconds\": 3,\n    \"path\": \"C:\\\\Users\\\\developjik\\\\Desktop\\\\Confluence-Sync-Tool\\\\dist\\\\confluence-sync\\\\confluence-sync.exe\",\n    \"pid\": 13188\n  },\n  \"ok\": true\n}\n",
+      "stderr": ""
+    }
+  },
+  "ok": true,
+  "external_remaining": [
+    "Live Confluence export still requires real credentials and target page/space/org.",
+    "Clean Windows machine without Python still requires external verification."
+  ]
+}
