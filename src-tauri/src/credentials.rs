@@ -64,17 +64,17 @@ pub fn delete_token(base_url: &str, email: &str) -> AppResult<()> {
 pub fn read_v1_native_token(base_url: &str, email: &str) -> Option<String> {
     use windows::core::PCWSTR;
     use windows::Win32::Security::Credentials::{
-        CredFreeW, CredReadW, CREDENTIALW, CRED_TYPE_GENERIC,
+        CredFree, CredReadW, CREDENTIALW, CRED_TYPE_GENERIC,
     };
 
     let key: Vec<u16> = credential_key(base_url, email).encode_utf16().chain([0]).collect();
     let mut ptr: *mut CREDENTIALW = std::ptr::null_mut();
     // SAFETY: `key` is a valid NUL-terminated wide string and `ptr` is a valid out-param.
-    let ok = unsafe { CredReadW(PCWSTR(key.as_ptr()), CRED_TYPE_GENERIC, 0, &mut ptr) };
-    if !ok.as_bool() {
+    let result = unsafe { CredReadW(PCWSTR(key.as_ptr()), CRED_TYPE_GENERIC, None, &mut ptr) };
+    if result.is_err() {
         return None;
     }
-    // SAFETY: `ptr` points at a credential owned by the credential manager until CredFreeW.
+    // SAFETY: `ptr` points at a credential owned by the credential manager until CredFree.
     unsafe {
         let cred = &*ptr;
         let size = cred.CredentialBlobSize as usize;
@@ -84,7 +84,7 @@ pub fn read_v1_native_token(base_url: &str, email: &str) -> Option<String> {
             .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
             .collect();
         let text = String::from_utf16_lossy(&words);
-        CredFreeW(ptr.cast());
+        CredFree(ptr.cast());
         let trimmed = text.trim_matches('\0').to_string();
         if trimmed.is_empty() { None } else { Some(trimmed) }
     }
