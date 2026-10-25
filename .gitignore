@@ -1,3 +1,4 @@
+# v1 (Python) artifacts
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -7,3 +8,15 @@ build/
 dist/
 docs/verification/external_evidence/
 docs/verification/external_bundle/
+
+# v2 (Rust + Tauri) artifacts
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+ui/dist/
+_site/
+*.log
+
+# tool/session state
+.gjc/
+.mimosa/

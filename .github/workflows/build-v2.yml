@@ -1,0 +1,78 @@
+name: Build v2 (Rust + Tauri)
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Rust tests
+    # windows matches the primary deployment target and the keyring backend
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Run unit tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib
+
+  build-windows:
+    name: Windows installer
+    runs-on: windows-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build Tauri app (NSIS)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: .
+          args: --bundles nsis
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: "Confluence Export Desktop ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+
+  build-macos:
+    name: macOS app
+    runs-on: macos-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build Tauri app
+        run: npx tauri build --bundles app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: |
+            src-tauri/target/release/bundle/macos/*.app
+          retention-days: 14

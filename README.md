@@ -1,129 +1,85 @@
-﻿# Confluence Export Desktop
+# Confluence Export Desktop (v2 — Rust + Tauri)
 
-Current baseline: 2026-05-05  
-Product baseline: Windows GUI Job Runner with background scheduling for `confluence-markdown-exporter==4.1.1`
+Current baseline: 2026-10-25
+v2 아키텍처: Rust 백엔드 + Tauri 2 데스크톱 앱, Atlassian REST API 직접 연동(CME 의존 제거), 새로운 UI/UX
 
-Confluence Export Desktop lets a Windows user save and run repeatable Confluence export jobs without installing Python on the final user PC. The app stores job settings, keeps the API token in Windows Credential Manager, builds a CME config at run time, and records run history/logs. CME owns the actual Confluence crawl, Markdown conversion, attachments, skip/cleanup, and lockfile behavior.
+v2는 Confluence 페이지/스페이스/사이트 전체를 Markdown + 첨부파일로 내보내는 데스크톱 앱입니다. Python이나
+`confluence-markdown-exporter`(CME) 없이 자체 Rust 엔진이 크롤·변환·스킵·정리를 수행합니다. v1(PySide6 + CME
+래퍼) 코드는 `src/confluence_sync_tool`에 참조용으로 남아 있습니다.
 
-## Documentation
+- 계획/골: [docs/V2_PLAN.md](docs/V2_PLAN.md)
+- v1 제품 요구사항(참조): [docs/PRD_v1.0.md](docs/PRD_v1.0.md)
+- 문서 웹사이트(GitHub Pages): https://developjik.github.io/confluence-export-desktop/ — main 브랜치 push 시 자동 갱신
 
-- Product requirements: [docs/PRD_v1.0.md](docs/PRD_v1.0.md)
-- Background scheduling spec: [docs/features/cron_background_runtime.md](docs/features/cron_background_runtime.md)
-- CME option mapping: [docs/CME_FEATURE_SUPPORT.md](docs/CME_FEATURE_SUPPORT.md)
-- Local verification summary: [docs/verification/coverage_report.md](docs/verification/coverage_report.md)
-- External/manual verification: [docs/verification/manual_verification_checklist.md](docs/verification/manual_verification_checklist.md)
+## What v2 Owns (전부 Rust)
 
-New development and verification should use `docs/PRD_v1.0.md` for the MVP baseline and `docs/features/cron_background_runtime.md` for the GUI/background scheduling baseline. GitHub Releases should publish the installer EXE as the primary asset.
+- Confluence Cloud REST API 클라이언트(재시도/백오프/페이지네이션, TLS 상시 검증)
+- Storage format → Markdown 변환기(헤딩/표/리스트/코드/링크 3종 모드/이미지/패널/expand/태스크/페이지 속성 → front matter/breadcrumbs)
+- 익스포터 오케스트레이션: 경로 템플릿, lockfile(v2 스키마) 기반 skip-unchanged, stale cleanup, 첨부파일
+- 프리셋 스케줄러(매일/매주/매월, 타임존), 트레이 상주, 창 닫기 → 트레이
+- OS 키체인 자격증명(Windows 자격 증명 관리자 / macOS 키체인) + v1 토큰 이관(Windows)
+- React UI: 대시보드 / 연결 / 작업 / 작업 편집(5섹션) / 실행 기록 / 설정 + 라이브 실행 뷰(단계·카운터·로그·취소)
 
-## Repository Layout
+## 아키텍처
 
-- Runtime source lives under `src/confluence_sync_tool`.
-- `tests` contains the local unit and GUI/CLI source-contract tests.
-- `scripts` contains build, release verification, and external evidence helpers.
-- `packaging` contains PyInstaller specs. The GUI spec is the default release path; the CLI spec is retained for developer and live-smoke support.
-- `build`, `__pycache__`, and test/tool caches are generated artifacts and are ignored. They can be deleted at any time.
-- `dist` is also generated, but it may contain the current packaged app, installer, and release assets used by smoke verification and handoff testing.
-
-## What The App Owns
-
-- PySide6 Windows GUI with `연결`, `작업`, `작업 설정` sidebar sections
-- GUI actions for login/logout, job management, manual run, and scheduled run
-- Job storage under `%APPDATA%\ConfluenceExportDesktop\app`
-- Windows Credential Manager token storage
-- CME config generation and advanced JSON merge
-- Preview/Dry Run remain engine/developer verification paths and are not exposed as final-user GUI actions
-- Export Now execution through the CME adapter
-- Preset schedule configuration and tray/background scheduler runtime
-- Run history and logs in the target workspace
-- PyInstaller onedir packaging for the GUI app. Developer CLI source and optional CLI packaging remain for automation/live-smoke support, but the default user build is GUI-only.
-- Inno Setup installer packaging for Release distribution as a single `Setup.exe`.
-
-## What CME Owns
-
-- Confluence page/page-tree/space/org traversal
-- Markdown conversion fidelity
-- Attachment export and link rewriting
-- Skip unchanged behavior
-- Stale file cleanup
-- `confluence-lock.json` management
-- Jira enrichment when configured
-
-## Development Commands
-
-```powershell
-$py = "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe"
-$env:PYTHONPATH = (Resolve-Path .\src).Path
-
-& $py -m compileall -q src tests scripts
-& $py -m unittest
-
-$env:PYTHON_EXE = $py
-.\scripts\build.ps1
-& $py scripts\smoke_built_apps.py
-& $py scripts\verify_release.py
+```
+ui/ (React + TS + Tailwind)   ←IPC→   src-tauri/ (Rust)
+                                       ├─ confluence/ (REST client, URL 파싱)
+                                       ├─ converter/  (storage → Markdown)
+                                       ├─ exporter/   (lockfile, 경로, 오케스트레이션)
+                                       ├─ scheduler / storage / credentials / commands
+                                       └─ Tauri 앱(트레이, 스케줄러 루프)
 ```
 
-Build the Windows installer for GitHub Releases:
+- API는 Confluence Cloud REST v1(content/space/attachment)을 사용합니다(v2 API 전환은 로드맵).
+- 저장 위치: `{config_dir}/ConfluenceExportDesktop/` — `settings.json`, `jobs.json`, `runs.jsonl`, `logs/app.log`.
+- 실행 이력은 앱 레벨(`runs.jsonl`)과 대상 폴더(`run_history.json`)에 이중 기록.
+- lockfile: `<target>/confluence-export.lock.json` (schema v2). v1/CME lockfile과 호환되지 않아 첫 실행 시 전체
+  재동기화됩니다.
 
-```powershell
-.\scripts\build_installer.ps1 -Version 0.1.0
-.\scripts\smoke_installer.ps1 -Version 0.1.0
+## 개발
+
+요구 사항: Rust 1.82+, Node 20+
+
+```bash
+npm install
+
+# 프론트엔드만 (브라우저 목업 모드 — http://localhost:5173)
+npm run dev:ui
+
+# 데스크톱 앱 실행
+npm run tauri:dev
+
+# 검증
+cargo test --manifest-path src-tauri/Cargo.toml --lib
+npm run build:ui        # tsc + vite build
+
+# 배포 빌드 (macOS: .app/.dmg)
+npm run tauri:build
 ```
 
-If Inno Setup 6 is not installed on the build PC:
+Windows 인스톨러(NSIS)는 GitHub Actions에서 빌드합니다: `.github/workflows/build-v2.yml`
+(`Build v2` 워크플로 — push/tag 시 Rust 테스트 → Windows NSIS + macOS 앱 아티팩트).
 
-```powershell
-.\scripts\build_installer.ps1 -Version 0.1.0 -InstallInnoSetup
-```
+## UI 흐름
 
-The installer output is `dist\ConfluenceExportDesktopSetup-0.1.0.exe`. Upload this file to GitHub Releases as the primary download. The ZIP/onedir output is only a portable fallback.
+1. `연결` — Base URL/이메일/API 토큰 입력 → `연결 테스트` → `저장`. 토큰은 OS 키체인에만 저장.
+   (v1 사용자는 `v1 설정 가져오기`로 작업/설정/토큰을 이관 — Windows는 토큰 포함.)
+2. `작업` → `새 작업` — 5섹션 편집기(기본 정보/범위/콘텐츠 옵션/고급/예약)에서 설정 후 저장.
+3. `지금 내보내기` — 라이브 실행 뷰에서 단계(수집→변환→첨부→정리)와 페이지별 로그를 실시간 확인, 취소 가능.
+4. `예약 사용`을 켜면 앱이 트레이에 있는 동안 매일/매주/매월 자동 실행됩니다.
 
-Build the optional developer CLI only when a live CLI smoke or CLI package handoff is needed:
+## 지원 범위
 
-```powershell
-.\scripts\build.ps1 -IncludeCli
-```
+- Scope: `auto`, `pages`, `pages-with-descendants`, `spaces`, `orgs` (v1과 동일한 auto 규칙)
+- 링크 모드: `absolute`(내보내기 루트 기준), `relative`(파일 상대), `wiki`(Confluence URL)
+- 경로 템플릿 토큰: `{space_name} {space_key} {homepage_title} {ancestor_titles} {page_title}` /
+  첨부 `{attachment_file_id} {attachment_file_name} {attachment_extension}` 등
+- 미지원 매크로는 `<!-- 지원되지 않는 매크로: ... -->` 코멘트로 폴백(변환 품질은 반복 개선 대상)
+- 비목표: Jira enrichment(후순위), Data Center 지원
 
-## GUI Flow
+## v1(레거시) 안내
 
-1. Install `dist\ConfluenceExportDesktopSetup-0.1.0.exe`, or run the portable app from `dist\confluence-export-desktop\confluence-export-desktop.exe`.
-2. On `연결`, enter Confluence base URL, email, and API token.
-3. Run `연결 테스트`. The token is not saved until the connection flow succeeds.
-4. Select `저장 후 작업 만들기`.
-5. On `작업 설정`, enter the Confluence URL, target folder, schedule preset/times, CME scope/options, and optional `CME Config JSON`.
-6. Save the job, return to `작업`, and use `지금 내보내기`.
-7. Turn on `예약 사용` for jobs that should run while the GUI is alive in tray/background mode.
-
-Supported CME scopes are `auto`, `pages`, `pages-with-descendants`, `spaces`, and `orgs`.
-
-## Storage Locations
-
-- Settings: `%APPDATA%\ConfluenceExportDesktop\app\settings.json`
-- Jobs: `%APPDATA%\ConfluenceExportDesktop\app\jobs.json`
-- Scheduler events: `%APPDATA%\ConfluenceExportDesktop\app\scheduler_events.jsonl`
-- App log: `%APPDATA%\ConfluenceExportDesktop\logs\app.log`
-- Job run history: `<target-dir>\run_history.json`
-- Job log: `<target-dir>\.logs\app.log`
-- CME lockfile: `<target-dir>\confluence-lock.json`
-
-API tokens must not appear in these files. They are stored through Windows Credential Manager and injected into a temporary CME config only while a run is executing.
-
-## External Gates
-
-Package verification:
-
-```powershell
-.\scripts\verify_external_gates.ps1 -Mode Package
-```
-
-Live Confluence verification currently uses developer automation and may require a developer CLI/script entrypoint:
-
-```powershell
-$env:CONFLUENCE_EXPORT_BASE_URL = "https://company.atlassian.net"
-$env:CONFLUENCE_EXPORT_EMAIL = "user@example.com"
-$env:CONFLUENCE_EXPORT_API_TOKEN = "<token>"
-$env:CONFLUENCE_EXPORT_PAGE_URL = "https://company.atlassian.net/wiki/spaces/SPACE/pages/123456"
-.\scripts\verify_external_gates.ps1 -Mode LiveConfluence
-```
-
-Current local verification passes. Clean Windows without Python and non-developer GUI UAT remain external evidence items.
+- v1 코드/문서/패키징은 그대로 유지(`src/confluence_sync_tool`, `scripts/*.ps1`, `packaging/`).
+- v1 데이터 위치: `{config_dir}/ConfluenceExportDesktop/app/` — v2의 `v1 설정 가져오기`가 읽습니다.
+- v1 lockfile(`confluence-lock.json`)은 v2에서 사용하지 않습니다.
