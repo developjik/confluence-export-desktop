@@ -33,7 +33,7 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Build site
         run: node scripts/build_site.mjs
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
