@@ -1,6 +1,8 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../../../tailwind.config.js";
+
+/* v3의 darkMode: "class"에 해당. v4는 CSS에서 변형(variant)을 정의한다. */
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   --c-bg: 220 24% 97%;
@@ -75,11 +77,13 @@ button {
   font: inherit;
 }
 
+/* v4에서는 다른 규칙에서 @apply 하려면 유틸리티로 등록해야 한다(.btn). */
+@utility btn {
+  @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 h-9 text-sm font-medium
+    transition-colors select-none whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none;
+}
+
 @layer components {
-  .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 h-9 text-sm font-medium
-      transition-colors select-none whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none;
-  }
   .btn-primary {
     @apply btn bg-accent text-white hover:bg-accent/90 active:bg-accent/80;
   }
