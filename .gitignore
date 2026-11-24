@@ -20,3 +20,6 @@ _site/
 # tool/session state
 .gjc/
 .mimosa/
+
+# Standalone source-including converter tests
+/converter-tests/target/
