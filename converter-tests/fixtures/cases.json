@@ -1,0 +1,162 @@
+[
+  {
+    "markdown": "# Title\n\n## Section\n\n###### Small\n",
+    "name": "headings",
+    "storage": "<h1>Title</h1><h2>Section</h2><h6>Small</h6>"
+  },
+  {
+    "markdown": "Hello **bold** *em* ~~gone~~ `` a`b `` &amp; 한글.\n",
+    "name": "inline",
+    "storage": "<p>Hello <strong>bold</strong> <em>em</em> <del>gone</del> <code>a`b</code> &amp; 한글.</p>"
+  },
+  {
+    "markdown": "- One\n    - Nested\n- Two\n\n3. Third\n4. Fourth\n",
+    "name": "lists",
+    "storage": "<ul><li>One<ul><li>Nested</li></ul></li><li>Two</li></ul><ol start=\"3\"><li>Third</li><li>Fourth</li></ol>"
+  },
+  {
+    "markdown": "| A | B |\n| --- | ---: |\n| x\\|y | line  <br>next |\n",
+    "name": "table",
+    "storage": "<table><tbody><tr><th>A</th><th style=\"text-align:right\">B</th></tr><tr><td>x|y</td><td>line<br/>next</td></tr></tbody></table>"
+  },
+  {
+    "markdown": "<table><tr><th colspan=\"2\">A &amp; B</th></tr><tr><td rowspan=\"2\">X</td><td>Y</td></tr></table>\n",
+    "name": "spans",
+    "storage": "<table><tr><th colspan=\"2\">A &amp; B</th></tr><tr><td rowspan=\"2\">X</td><td>Y</td></tr></table>"
+  },
+  {
+    "markdown": "````js\nconst x = `<ok>`;\n```\n````\n",
+    "name": "code",
+    "storage": "<ac:structured-macro ac:name=\"code\"><ac:parameter ac:name=\"language\">js</ac:parameter><ac:plain-text-body><![CDATA[const x = `<ok>`;\n```]]></ac:plain-text-body></ac:structured-macro>"
+  },
+  {
+    "markdown": "```\nraw <x>\ntext\n```\n",
+    "name": "noformat",
+    "storage": "<ac:structured-macro ac:name=\"noformat\"><ac:plain-text-body><![CDATA[raw <x>\ntext]]></ac:plain-text-body></ac:structured-macro>"
+  },
+  {
+    "markdown": "> **[정보] Heading**\n>\n> Body info\n\n> **[메모] Heading**\n>\n> Body note\n\n> **[주의] Heading**\n>\n> Body warning\n\n> **[팁] Heading**\n>\n> Body tip\n\n> **[패널] Heading**\n>\n> Body panel\n",
+    "name": "panels",
+    "storage": "<ac:structured-macro ac:name=\"info\"><ac:parameter ac:name=\"title\">Heading</ac:parameter><ac:rich-text-body><p>Body info</p></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name=\"note\"><ac:parameter ac:name=\"title\">Heading</ac:parameter><ac:rich-text-body><p>Body note</p></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name=\"warning\"><ac:parameter ac:name=\"title\">Heading</ac:parameter><ac:rich-text-body><p>Body warning</p></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name=\"tip\"><ac:parameter ac:name=\"title\">Heading</ac:parameter><ac:rich-text-body><p>Body tip</p></ac:rich-text-body></ac:structured-macro><ac:structured-macro ac:name=\"panel\"><ac:parameter ac:name=\"title\">Heading</ac:parameter><ac:rich-text-body><p>Body panel</p></ac:rich-text-body></ac:structured-macro>"
+  },
+  {
+    "markdown": "<details>\n<summary>More &lt;now></summary>\n\nDetails\n\n</details>\n",
+    "name": "expand",
+    "storage": "<ac:structured-macro ac:name=\"expand\"><ac:parameter ac:name=\"title\">More &lt;now&gt;</ac:parameter><ac:rich-text-body><p>Details</p></ac:rich-text-body></ac:structured-macro>"
+  },
+  {
+    "markdown": "- [x] Done\n- [ ] Todo\n",
+    "name": "tasks",
+    "storage": "<ac:task-list><ac:task><ac:task-status>complete</ac:task-status><ac:task-body>Done</ac:task-body></ac:task><ac:task><ac:task-status>incomplete</ac:task-status><ac:task-body>Todo</ac:task-body></ac:task></ac:task-list>"
+  },
+  {
+    "markdown": "> Quote\n>\n> Second\n\n```\nraw <x>\n```\n\n---\n",
+    "name": "quote-pre",
+    "storage": "<blockquote><p>Quote</p><p>Second</p></blockquote><pre>raw &lt;x&gt;</pre><hr/>"
+  },
+  {
+    "markdown": "[Link](https://example.invalid/a%28b%29) [Wiki](https://example.invalid/wiki/spaces/S/pages/2) No target <https://example.invalid>\n",
+    "name": "links",
+    "storage": "<p><a href=\"https://example.invalid/a(b)\">Link</a> <a href=\"/spaces/S/pages/2\">Wiki</a> <a>No target</a> <a href=\"https://example.invalid\"> </a></p>"
+  },
+  {
+    "markdown": "[Other page](other.md#part)\n",
+    "name": "page-links",
+    "storage": "<p><ac:link ac:anchor=\"part\"><ri:page ri:content-title=\"Other\" ri:space-key=\"S\"/><ac:plain-text-link-body><![CDATA[Other page]]></ac:plain-text-link-body></ac:link></p>"
+  },
+  {
+    "markdown": "Missing [Jump](#local)\n",
+    "name": "missing-links",
+    "storage": "<p><ac:link><ri:page ri:content-title=\"Missing\"/></ac:link> <ac:link ac:anchor=\"local\"><ac:link-body>Jump</ac:link-body></ac:link></p>"
+  },
+  {
+    "markdown": "![Diagram](../assets/diagram.png)![External](https://example.invalid/image.png)\n",
+    "name": "images",
+    "storage": "<p><ac:image ac:alt=\"Diagram\"><ri:attachment ri:filename=\"diagram.png\"/></ac:image><img src=\"https://example.invalid/image.png\" alt=\"External\"/></p>"
+  },
+  {
+    "markdown": "[Download](../assets/diagram.png)\n",
+    "name": "attachment-link",
+    "storage": "<p><ac:link><ri:attachment ri:filename=\"diagram.png\"/><ac:plain-text-link-body>Download</ac:plain-text-link-body></ac:link></p>"
+  },
+  {
+    "markdown": "---\nOwner: Team A\nStatus: Ready\n---\n",
+    "name": "properties",
+    "storage": "<ac:structured-macro ac:name=\"page-properties\"><ac:rich-text-body><table><tr><th>Owner</th><td>Team A</td></tr><tr><th>Status</th><td>Ready</td></tr></table></ac:rich-text-body></ac:structured-macro>"
+  },
+  {
+    "markdown": "<!-- 지원되지 않는 매크로: custom -->\n",
+    "name": "unknown-macro",
+    "storage": "<ac:structured-macro ac:name=\"custom\"><ac:parameter ac:name=\"key\">value</ac:parameter></ac:structured-macro>"
+  },
+  {
+    "markdown": "<!-- 지원되지 않는 매크로: custom -->\n",
+    "name": "rich-unknown",
+    "storage": "<ac:structured-macro ac:name=\"custom\"><ac:rich-text-body><p>Preserved body</p></ac:rich-text-body></ac:structured-macro>"
+  },
+  {
+    "markdown": "Before\n\n```\nunfinished\n```\n",
+    "name": "malformed",
+    "storage": "<p>Before</p><ac:structured-macro ac:name=\"code\"><ac:plain-text-body><![CDATA[unfinished"
+  },
+  {
+    "markdown": "[Self](self.md)\n\n<!-- 지원되지 않는 매크로: include -->\n",
+    "name": "cyclic-reference",
+    "storage": "<p><ac:link><ri:page ri:content-title=\"Self\" ri:space-key=\"S\"/><ac:link-body>Self</ac:link-body></ac:link></p><ac:structured-macro ac:name=\"include\"><ac:parameter ac:name=\"\">Self</ac:parameter></ac:structured-macro>"
+  },
+  {
+    "markdown": "&lt;tag> \"quote\" &amp; A &amp;unknown;\n",
+    "name": "entities",
+    "storage": "<p>&lt;tag&gt; &quot;quote&quot; &#38; &#x41; &unknown;</p>"
+  },
+  {
+    "markdown": "\n",
+    "name": "empty",
+    "storage": "<p></p><h1></h1><blockquote></blockquote><pre></pre><table></table>"
+  },
+  {
+    "markdown": "Inside\n\nSpan <u>under</u> <sup>2</sup><sub>n</sub>  \nend\n",
+    "name": "transparent",
+    "storage": "<section><div><p>Inside</p></div></section><p><span>Span</span> <u>under</u> <sup>2</sup><sub>n</sub><br/>end</p>"
+  },
+  {
+    "markdown": "**Term** — Meaning\n\n**Only**\n\n**Next**\n\nLoose\n",
+    "name": "definitions",
+    "storage": "<dl><dt>Term</dt><dd>Meaning</dd><dt>Only</dt><dt>Next</dt><dd></dd><dd>Loose</dd></dl>"
+  },
+  {
+    "markdown": "![A](https://example.invalid/a.png)\n\n*Caption*\n",
+    "name": "figure",
+    "storage": "<figure><img src=\"https://example.invalid/a.png\" alt=\"A\"/><figcaption>Caption</figcaption></figure>"
+  },
+  {
+    "markdown": "`Ready` (green)\n\n2026-01-02\n\n[Jira: DEV-1](https://example.invalid/browse/DEV-1)\n",
+    "name": "status-date-jira",
+    "storage": "<ac:structured-macro ac:name=\"status\"><ac:parameter ac:name=\"title\">Ready</ac:parameter><ac:parameter ac:name=\"colour\">green</ac:parameter></ac:structured-macro><ac:structured-macro ac:name=\"date\"><ac:parameter ac:name=\"value\">2026-01-02</ac:parameter></ac:structured-macro><ac:structured-macro ac:name=\"jira\"><ac:parameter ac:name=\"key\">DEV-1</ac:parameter><ac:parameter ac:name=\"server\">https://example.invalid</ac:parameter></ac:structured-macro>"
+  },
+  {
+    "markdown": "> **[주의] Attention**\n>\n> Warn\n",
+    "name": "panel-div",
+    "storage": "<div class=\"confluence-information-macro confluence-information-macro-warning\"><p class=\"confluence-information-macro-heading\">Attention</p><p>Warn</p></div>"
+  },
+  {
+    "markdown": "2026-01-02Today@tester:smile:`x`[spaced](a%20b)\n",
+    "name": "inline-extras",
+    "storage": "<p><time datetime=\"2026-01-02\"></time><time>Today</time><ri:user ri:username=\"tester\"/><ac:emoji ac:shortname=\":smile:\"/><code> </code><tt>x</tt><b> </b><ac:placeholder>hidden</ac:placeholder><a href=\"a b\">spaced</a></p>"
+  },
+  {
+    "markdown": "| A |  |\n| --- | --- |\n| B | C |\n",
+    "name": "ragged-table",
+    "storage": "<table><caption>Caption</caption><tr><td>A</td></tr><tr><td>B</td><td>C</td></tr></table>"
+  },
+  {
+    "markdown": "- Parent\n  Tail\n    - [x] Nested\n",
+    "name": "nested-tasks",
+    "storage": "<ul><li><p>Parent</p><ac:task-list><ac:task><ac:task-status>complete</ac:task-status><ac:task-body>Nested</ac:task-body></ac:task></ac:task-list><p>Tail</p></li></ul>"
+  },
+  {
+    "markdown": "<details>\n<summary>펼치기</summary>\n\n\n\n</details>\n\n[Jira: Jira]\n",
+    "name": "macro-empty",
+    "storage": "<ac:structured-macro ac:name=\"code\"></ac:structured-macro><ac:structured-macro ac:name=\"expand\"></ac:structured-macro><ac:structured-macro ac:name=\"page-properties\"></ac:structured-macro><ac:structured-macro ac:name=\"toc\"></ac:structured-macro><ac:structured-macro ac:name=\"jira\"></ac:structured-macro><ac:structured-macro ac:name=\"date\"></ac:structured-macro><ac:structured-macro ac:name=\"status\"></ac:structured-macro>"
+  }
+]
