@@ -13,6 +13,7 @@ const outDir = path.join(root, "_site");
 
 const DOCS = [
   { file: "README.md", slug: "index", title: "소개", nav: true, landing: true },
+  { file: "docs/MIGRATION_V1_V2.md", slug: "migration-v1-v2", title: "v1 → v2 단계별 이관", nav: true },
   { file: "docs/V2_PLAN.md", slug: "v2-plan", title: "V2 계획 · 골", nav: true },
   { file: "docs/PRD_v1.0.md", slug: "prd-v1", title: "v1 제품 요구사항", nav: true },
   { file: "docs/CME_FEATURE_SUPPORT.md", slug: "cme-support", title: "v1 CME 옵션 매핑", nav: true },
