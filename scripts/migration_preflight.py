@@ -45,10 +45,16 @@ def preflight(legacy: Path, proposed: Path) -> dict:
     if not old.is_dir():
         raise ValueError("legacy directory must exist")
     new = proposed.resolve(strict=False)
-    if old == new or old in new.parents or new in old.parents:
+    # Conservative casefold also rejects lookalike separate paths on case-sensitive
+    # volumes. False refusal is safer than treating an aliased legacy subtree as new.
+    old_parts = tuple(part.casefold() for part in old.parts)
+    new_parts = tuple(part.casefold() for part in new.parts)
+    if old_parts == new_parts[:len(old_parts)] or new_parts == old_parts[:len(new_parts)]:
         raise ValueError("v2 target must be separate, not the same directory or a parent/child of legacy")
     # Do not resolve away a symlink and then describe it as a fresh target.
     for part in [proposed, *proposed.parents]:
+        if part.exists() and not part.is_dir():
+            raise ValueError("v2 target has a non-directory ancestor")
         if part.is_symlink():
             raise ValueError("v2 target must not pass through a symlink")
     if new.exists():
