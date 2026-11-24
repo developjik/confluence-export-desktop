@@ -6,11 +6,15 @@ pub mod error;
 pub mod models;
 
 pub fn golden_convert(s: &str) -> String {
+    golden_convert_from(s, "1", "Self")
+}
+
+pub fn golden_convert_from(s: &str, id: &str, title: &str) -> String {
     {
         use crate::{converter::*, models::HrefMode};
         let page = PageMeta {
-            id: "1".into(),
-            title: "Self".into(),
+            id: id.into(),
+            title: title.into(),
             space_key: "S".into(),
             space_name: "Space".into(),
             web_url: "https://example.invalid/wiki/pages/1".into(),
@@ -18,7 +22,7 @@ pub fn golden_convert(s: &str) -> String {
             homepage_id: None,
             version: 1,
             updated: None,
-            rel_path: "pages/self.md".into(),
+            rel_path: format!("pages/{}.md", title.to_lowercase()),
         };
         let mut index = ExportIndex::default();
         index.base_url = "https://example.invalid".into();
