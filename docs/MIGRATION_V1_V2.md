@@ -12,7 +12,7 @@
 ## 1. 실행을 멈추고 되돌릴 지점을 남깁니다
 
 1. v1과 v2의 예약을 끄고 실행 중인 내보내기가 끝났는지 확인합니다. 같은 폴더에 두 앱을 동시에 실행하지 않습니다.
-2. v1 대상 폴더 **전체**를 다른 위치에 복사합니다. Markdown·첨부·lockfile을 포함합니다. **작업 설정은 대상 폴더 밖에 있으므로 별도 백업**합니다. Windows에서 `APPDATA`가 설정돼 있으면 `%APPDATA%\ConfluenceExportDesktop\app\`, 그렇지 않으면 `~/.config/ConfluenceExportDesktop/app/` 폴더 전체(`jobs.json`, `settings.json` 등)를 따로 복사합니다. OS 키체인 자격증명은 이 복사에 포함되지 않으므로 재인증이 필요할 수 있습니다. 복사본의 몇 개 문서/이미지가 실제로 열리는지 확인합니다. 백업 전 원본을 이동·삭제하지 않습니다.
+2. v1 대상 폴더 **전체**를 다른 위치에 복사합니다. Markdown·첨부·lockfile을 포함합니다. **작업 설정은 대상 폴더 밖에 있으므로 별도 백업**합니다. 운영체제와 무관하게 비어 있지 않은 `APPDATA`가 있으면 그 경로 아래 `ConfluenceExportDesktop/app/`(Windows 표기: `%APPDATA%\ConfluenceExportDesktop\app\`), 없으면 `~/.config/ConfluenceExportDesktop/app/` 폴더 전체(`jobs.json`, `settings.json` 등)를 따로 복사합니다. OS 키체인 자격증명은 이 복사에 포함되지 않으므로 재인증이 필요할 수 있습니다. 복사본의 몇 개 문서/이미지가 실제로 열리는지 확인합니다. 백업 전 원본을 이동·삭제하지 않습니다.
 3. v2 `v1 설정 가져오기`는 작업/설정/지원되는 토큰 이관입니다. 출력물·lockfile을 v2 호환으로 바꿔주지 않습니다. 가져온 작업도 대상 폴더·범위·예약·정리 옵션을 다시 확인합니다.
 4. 토큰은 앱의 연결 화면/OS 키체인으로만 관리합니다. lockfile·설정·로그를 공개 이슈에 그대로 올리지 않습니다.
 
