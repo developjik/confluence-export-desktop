@@ -7,6 +7,7 @@ v2는 Confluence 페이지/스페이스/사이트 전체를 Markdown + 첨부파
 `confluence-markdown-exporter`(CME) 없이 자체 Rust 엔진이 크롤·변환·스킵·정리를 수행합니다. v1(PySide6 + CME
 래퍼) 코드는 `src/confluence_sync_tool`에 참조용으로 남아 있습니다.
 
+- v1 → v2 단계별 이관: [스페이스별 수동 이관 가이드](docs/MIGRATION_V1_V2.md) · 읽기 전용 사전 점검 포함
 - 계획/골: [docs/V2_PLAN.md](docs/V2_PLAN.md)
 - v1 제품 요구사항(참조): [docs/PRD_v1.0.md](docs/PRD_v1.0.md)
 - 문서 웹사이트(GitHub Pages): https://developjik.github.io/confluence-export-desktop/ — main 브랜치 push 시 자동 갱신
@@ -34,8 +35,9 @@ ui/ (React + TS + Tailwind)   ←IPC→   src-tauri/ (Rust)
 - API는 Confluence Cloud REST v1(content/space/attachment)을 사용합니다(v2 API 전환은 로드맵).
 - 저장 위치: `{config_dir}/ConfluenceExportDesktop/` — `settings.json`, `jobs.json`, `runs.jsonl`, `logs/app.log`.
 - 실행 이력은 앱 레벨(`runs.jsonl`)과 대상 폴더(`run_history.json`)에 이중 기록.
-- lockfile: `<target>/confluence-export.lock.json` (schema v2). v1/CME lockfile과 호환되지 않아 첫 실행 시 전체
-  재동기화됩니다.
+- lockfile: `<target>/confluence-export.lock.json` (schema v2). v1/CME lockfile과 자동 호환되지 않습니다. 전체 사이트를 첫 실행에 다시 받지 않으려면
+  [별도 대상·스페이스별 단계 이관](docs/MIGRATION_V1_V2.md)을 사용합니다. 선택한 스페이스는 한 번 다시 받으며,
+  이전 출력의 체크섬 자동 재사용이나 변경 스페이스 자동 탐지는 지원하지 않습니다.
 
 ## 개발
 
@@ -82,4 +84,5 @@ Windows 인스톨러(NSIS)는 GitHub Actions에서 빌드합니다: `.github/wor
 
 - v1 코드/문서/패키징은 그대로 유지(`src/confluence_sync_tool`, `scripts/*.ps1`, `packaging/`).
 - v1 데이터 위치: `{config_dir}/ConfluenceExportDesktop/app/` — v2의 `v1 설정 가져오기`가 읽습니다.
-- v1 lockfile(`confluence-lock.json`)은 v2에서 사용하지 않습니다.
+- v1 lockfile(`confluence-lock.json`)은 v2에서 사용하지 않습니다. 이름/스키마만 바꾸거나 기존 출력 위에 실행하지 말고
+  [이관 가이드](docs/MIGRATION_V1_V2.md)의 백업·정리 끄기·별도 폴더 절차를 따릅니다.
