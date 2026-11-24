@@ -23,6 +23,13 @@ class MigrationPreflightTests(unittest.TestCase):
  def test_separate_target_required(self):
   for target in [self.old,self.old/'child',self.root]:
    with self.assertRaises(ValueError):m.preflight(self.old,target)
+ def test_case_aliases_conservatively_refused(self):
+  for target in [self.root/'LEGACY',self.root/'LEGACY'/'child']:
+   with self.assertRaises(ValueError):m.preflight(self.old,target)
+ def test_file_ancestor_refused(self):
+  p=self.root/'file';p.write_text('keep')
+  with self.assertRaises(ValueError):m.preflight(self.old,p/'child')
+  self.assertEqual(p.read_text(),'keep')
  def test_empty_target_only(self):
   self.new.mkdir();self.assertTrue(m.preflight(self.old,self.new)['ready_for_manual_guide']);(self.new/'keep').write_text('keep')
   with self.assertRaises(ValueError):m.preflight(self.old,self.new)
