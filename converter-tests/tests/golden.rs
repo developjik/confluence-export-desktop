@@ -38,13 +38,17 @@ fn hostile_and_truncated_storage_is_bounded() {
 }
 
 #[test]
-fn reciprocal_page_links_do_not_recurse() {
-    for title in ["Self", "Other"] {
+fn reciprocal_page_links_and_includes_stay_inert() {
+    for (id, title, target, filename) in [
+        ("1", "Self", "Other", "other.md"),
+        ("2", "Other", "Self", "self.md"),
+    ] {
         let input = format!(
-            "<ac:link><ri:page ri:content-title=\"{title}\" ri:space-key=\"S\"/></ac:link><ac:structured-macro ac:name=\"include\"><ac:parameter>{title}</ac:parameter></ac:structured-macro>"
+            "<ac:link><ri:page ri:content-title=\"{target}\" ri:space-key=\"S\"/></ac:link><ac:structured-macro ac:name=\"include\"><ac:parameter>{target}</ac:parameter></ac:structured-macro>"
         );
-        let out = golden_convert(&input);
-        assert!(out.contains(title));
-        assert!(out.len() < 1_000);
+        assert_eq!(
+            converter_contract_tests::golden_convert_from(&input, id, title),
+            format!("[{target}]({filename})\n\n<!-- 지원되지 않는 매크로: include -->\n")
+        );
     }
 }
